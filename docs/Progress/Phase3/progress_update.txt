@@ -1,0 +1,549 @@
+================================================================================
+PHASE 3 PROGRESS UPDATE — ACLS.Api Layer (REST API)
+Date: 2026-03-19
+================================================================================
+
+PHASE OBJECTIVE
+---------------
+Build the ACLS.Api layer — the REST API entry point for the ACLS platform.
+This includes all ASP.NET Core controllers, middleware, the composition root
+(Program.cs), request models (ACLS.Contracts), JWT authentication, blob storage
+integration, and all missing Application layer commands/queries required to
+satisfy the v1.yaml API contract.
+
+PREREQUISITE READING
+--------------------
+All 12 mandatory documents were read in full before any code was written:
+  1.  docs/00_Project_Constitution/ai_collaboration_rules.md
+  2.  docs/00_Project_Constitution/repository_blueprint.md
+  3.  docs/00_Project_Constitution/session_prompt_templates.md
+  4.  docs/02_Domain/ubiquitous_language.md
+  5.  docs/03_Architecture/system_overview.md
+  6.  docs/05_API/api_overview.md
+  7.  docs/05_API/v1.yaml                        (full OpenAPI spec)
+  8.  docs/07_Implementation/clean_architecture_guide.md
+  9.  docs/07_Implementation/coding_standards.md
+  10. docs/07_Implementation/patterns/media_upload_pattern.md
+  11. docs/07_Implementation/patterns/multi_tenancy_pattern.md
+  12. docs/06_UML/sequence_diagrams.md
+
+WORKSPACE STATE AT PHASE START
+-------------------------------
+  Existing projects (Phase 1 + 2, unmodified at start):
+    - ACLS.SharedKernel    (Result, Error, Guard, EntityBase, ValueObject)
+    - ACLS.Domain          (all aggregates, repo interfaces, domain services)
+    - ACLS.Persistence     (EF Core DbContext, repositories)
+    - ACLS.Infrastructure  (DispatchService stub)
+    - ACLS.Application     (MediatR CQRS, pipeline behaviours, complaint +
+                            outage handlers, DTOs)
+    - ACLS.Contracts       (empty skeleton — project file only)
+
+  Not yet existing (created in this phase):
+    - ACLS.Api             (ASP.NET Core Web API host)
+
+  Test baseline at phase start:
+    Domain.Tests      — 27 / 27 passed
+    Application.Tests — 22 / 22 passed
+
+================================================================================
+NEW APPLICATION LAYER ADDITIONS
+================================================================================
+(Application cross-cutting concerns required for API endpoints not covered by
+Phase 2 commands/queries.)
+
+── Common/Interfaces/ ───────────────────────────────────────────────────────────
+
+  IJwtTokenService.cs
+    GenerateToken(User user): (string Token, DateTime ExpiresAt)
+    Implemented by ACLS.Infrastructure.Auth.JwtTokenService.
+
+  IPasswordHasher.cs
+    string Hash(string plaintext)
+    bool Verify(string plaintext, string hash)
+    Implemented by ACLS.Infrastructure.Auth.BcryptPasswordHasher.
+
+── Common/ ───────────────────────────────────────────────────────────────────────
+
+  PagedResult.cs
+    Generic record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount,
+                                  int Page, int PageSize)
+    TotalPages computed property.
+
+── Staff/DTOs/ ──────────────────────────────────────────────────────────────────
+
+  StaffMemberDto.cs
+    StaffMemberId, UserId, FullName, JobTitle, Skills, Availability,
+    AverageRating, LastAssignedAt
+
+── Staff/Queries/ ───────────────────────────────────────────────────────────────
+
+  GetAllStaff/GetAllStaffQuery.cs       (combined single file)
+    Loads all staff for property via IStaffRepository.GetAllByPropertyAsync.
+    Joins with IUserRepository to resolve FullName/JobTitle.
+
+  GetStaffById/GetStaffByIdQuery.cs     (combined)
+    Returns Result<StaffMemberDto>. Returns 404 error if staff not found.
+
+  GetAvailableStaff/GetAvailableStaffQuery.cs   (combined)
+    Delegates to IStaffRepository.GetAvailableAsync.
+
+  GetMyStaffProfile/GetMyStaffProfileQuery.cs   (combined)
+    Returns StaffMemberWithAssignmentsDto (profile + active assignments list).
+    Resolves staff via ICurrentPropertyContext.UserId via
+    IStaffRepository.GetByUserIdAsync.
+
+── Staff/Commands/ ──────────────────────────────────────────────────────────────
+
+  UpdateAvailability/UpdateAvailabilityCommand.cs  (combined)
+    Validates requested state is one of: AVAILABLE, ON_BREAK, OFF_DUTY
+    (BUSY cannot be set manually — it is set by AssignComplaintCommand).
+    Enforces that staff.UserId == propertyContext.UserId (own record only).
+    Calls StaffMember.UpdateAvailability(StaffState).
+
+── Users/DTOs/ ──────────────────────────────────────────────────────────────────
+
+  UserDto.cs            (UserId, Email, Role, FullName, IsActive, PropertyId)
+                         static FromDomain(User) factory
+  AuthTokenDto.cs       (AccessToken, ExpiresAt, UserId, Role, PropertyId)
+  InvitationDto.cs      (InvitationTokenId, Email, UnitId, UnitNumber,
+                         ExpiresAt, IssuedAt)
+
+── Users/Queries/ ───────────────────────────────────────────────────────────────
+
+  GetAllUsers/GetAllUsersQuery.cs   (combined)
+    Loads all users for property via IUserRepository.GetAllByPropertyAsync.
+
+── Users/Commands/ ──────────────────────────────────────────────────────────────
+
+  RegisterResident/RegisterResidentCommand.cs   (combined)
+    Looks up InvitationToken by token string.
+    Validates token is not expired / already redeemed.
+    Creates User + Resident (linked) on the property from the token's UnitId.
+    Calls invitation.Redeem(userId, utcNow) to mark used.
+    Generates JWT via IJwtTokenService.
+    Returns AuthTokenDto.
+
+  LoginUser/LoginCommand.cs   (combined)
+    Looks up User by email.
+    Returns Auth.InvalidCredentials (mapped to 401) if not found or inactive.
+    Verifies password via IPasswordHasher.Verify.
+    Calls user.RecordLogin() to update LastLoginAt.
+    Returns AuthTokenDto.
+
+  InviteResident/InviteResidentCommand.cs   (combined)
+    Validates unit belongs to current property.
+    Generates a cryptographically secure 64-character hex token using
+    System.Security.Cryptography.RandomNumberGenerator (32 bytes → hex).
+    Creates InvitationToken with 7-day expiry.
+    Returns InvitationDto.
+
+  DeactivateUser/DeactivateUserCommand.cs   (combined)
+    Validates user.PropertyId == propertyContext.PropertyId (same property).
+    Calls user.Deactivate(). Returns AccessDenied if cross-property attempt.
+
+  ReactivateUser/ReactivateUserCommand.cs   (combined)
+    Mirror of DeactivateUser. Calls user.Reactivate().
+
+── Outages/Queries/ ─────────────────────────────────────────────────────────────
+
+  GetAllOutages/GetAllOutagesQuery.cs    (combined)
+    Loads all outages for property via IOutageRepository.GetAllByPropertyAsync.
+
+  GetOutageById/GetOutageByIdQuery.cs    (combined)
+    Returns 404 error if outage not found or not on current property.
+
+── Reports/DTOs/ ────────────────────────────────────────────────────────────────
+
+  DashboardMetricsDto.cs
+    TotalComplaints, OpenComplaints, InProgressComplaints, ResolvedComplaints,
+    SosCount, AverageTatHours (reserved / null for stub),
+    ActiveAssignments (list of ActiveAssignmentDto),
+    StaffAvailability (list of StaffAvailabilitySummaryDto).
+    Nested records: ActiveAssignmentDto, StaffAvailabilitySummaryDto.
+
+  StaffPerformanceSummaryDto.cs
+    StaffMemberId, FullName, JobTitle?, TotalAssigned, TotalResolved,
+    AverageRatingScore, AverageTatHours.
+    static FromDomain(StaffPerformanceSummary, string? jobTitle) factory.
+
+── Reports/Queries/ ─────────────────────────────────────────────────────────────
+
+  GetDashboardMetrics/GetDashboardMetricsQuery.cs   (combined)
+    Loads all complaints + all staff for property.
+    Counts by TicketStatus; builds ActiveAssignments from ASSIGNED+EN_ROUTE+
+    IN_PROGRESS complaints; builds StaffAvailability summary from staff list.
+
+  GetStaffPerformance/GetStaffPerformanceQuery.cs   (combined)
+    Delegates to IReportingService.GetStaffPerformanceAsync.
+    Enriches each summary with JobTitle from IStaffRepository.
+
+  GetComplaintsByUnit/GetComplaintsByUnitQuery.cs   (combined)
+    Returns history for a unit via IComplaintRepository.GetByUnitAsync.
+
+  GetComplaintsSummary/GetComplaintsSummaryQuery.cs   (combined)
+    Accepts optional ComplaintQueryOptions for filtering.
+    Returns list of ComplaintSummaryDto.
+
+================================================================================
+ACLS.Contracts PROJECT (populated)
+================================================================================
+(BCL-only — zero NuGet dependencies. No ASP.NET Core types allowed.
+ File upload fields are EXCLUDED — controllers bind IFormFileCollection
+ separately from the request model.)
+
+  Auth/RegisterResidentRequest.cs
+    string InvitationToken, Email, Password, FirstName, LastName, Phone?
+
+  Auth/LoginRequest.cs
+    string Email, Password
+
+  Complaints/SubmitComplaintRequest.cs
+    string Title, Description, Category, Urgency
+    bool PermissionToEnter
+    (Media files: bound separately via IFormFileCollection in controller)
+
+  Complaints/TriggerSosRequest.cs
+    string Title, Description
+    bool PermissionToEnter
+
+  Complaints/AssignComplaintRequest.cs
+    int StaffMemberId
+
+  Complaints/UpdateComplaintStatusRequest.cs
+    string Status   (EN_ROUTE | IN_PROGRESS)
+
+  Complaints/ResolveComplaintRequest.cs
+    string? ResolutionNotes
+    (Completion photos: bound separately via IFormFileCollection in controller)
+
+  Complaints/SubmitFeedbackRequest.cs
+    int Rating, string? Comment
+
+  Complaints/AddWorkNoteRequest.cs
+    string Content
+
+  Complaints/UpdateEtaRequest.cs
+    DateTime Eta
+
+  Staff/UpdateAvailabilityRequest.cs
+    string Availability   (AVAILABLE | ON_BREAK | OFF_DUTY)
+
+  Outages/DeclareOutageRequest.cs
+    string Title, OutageType, Description
+    DateTime StartTime, EndTime?
+
+  Users/InviteResidentRequest.cs
+    string Email, int UnitId
+
+================================================================================
+ACLS.Infrastructure ADDITIONS
+================================================================================
+
+  Auth/JwtTokenService.cs
+    Implements IJwtTokenService (Application interface).
+    HS256 algorithm via System.IdentityModel.Tokens.Jwt.
+    Claims: sub (UserId), email, role (Role enum string), property_id (int),
+            jti (new Guid, replay protection).
+    Expiry: 60 minutes from UtcNow.
+    Config keys: JwtSettings:Secret (required), JwtSettings:Issuer
+                 (default "acls-api"), JwtSettings:Audience
+                 (default "acls-clients").
+
+  Auth/BcryptPasswordHasher.cs
+    Implements IPasswordHasher (Application interface).
+    Uses BCrypt.Net-Next library. Work factor: 12.
+    Verify() uses constant-time comparison (BCrypt.Verify).
+
+  Storage/BlobStorageService.cs
+    Implements IStorageService (Domain interface).
+    Stub — generates placeholder URL from BlobStorage:ContainerUrl config key.
+    Implements both UploadAsync and DeleteAsync (no-op stub for delete).
+    Replace with Azure.Storage.Blobs SDK for production.
+
+  Reporting/ReportingService.cs
+    Implements IReportingService (Domain interface).
+    Stub — returns empty lists.
+    Full aggregation deferred to Phase 5 (background worker / SQL views).
+
+  ACLS.Infrastructure.csproj (updated)
+    New NuGet packages added:
+      BCrypt.Net-Next                                    4.0.3
+      Microsoft.AspNetCore.Authentication.JwtBearer      8.*
+      Microsoft.Extensions.Configuration.Abstractions   8.*
+      Microsoft.Extensions.Logging.Abstractions         8.*
+      System.IdentityModel.Tokens.Jwt                   7.*
+
+  InfrastructureServiceCollectionExtensions.cs (updated)
+    AddInfrastructure() now registers (all Scoped):
+      IDispatchService  → DispatchService    (Phase 1, unchanged)
+      IStorageService   → BlobStorageService  (NEW)
+      IReportingService → ReportingService    (NEW)
+      IJwtTokenService  → JwtTokenService     (NEW)
+      IPasswordHasher   → BcryptPasswordHasher (NEW)
+
+================================================================================
+ACLS.Api PROJECT (new)
+================================================================================
+
+  ACLS.Api.csproj
+    SDK: Microsoft.NET.Sdk.Web, Target: net8.0
+    LangVersion: 12, Nullable: enable
+    NuGet packages:
+      Microsoft.AspNetCore.Authentication.JwtBearer  8.*
+      Swashbuckle.AspNetCore                         6.*
+    ProjectReferences: ACLS.Application, ACLS.Contracts,
+                       ACLS.Infrastructure, ACLS.Persistence
+
+── Services/ ────────────────────────────────────────────────────────────────────
+
+  Services/CurrentPropertyContext.cs
+    Implements ICurrentPropertyContext (Application interface).
+    Registered as BOTH CurrentPropertyContext (concrete, Scoped) AND
+    ICurrentPropertyContext (interface) in Program.cs — allows TenancyMiddleware
+    to call the internal SetContext() method while handlers consume only the
+    interface.
+    Properties throw InvalidOperationException if accessed before SetContext()
+    is called (fail-fast).
+    SetContext(int propertyId, int userId) is internal — only callable from
+    within ACLS.Api assembly (enforced by access modifier).
+
+── Middleware/ ───────────────────────────────────────────────────────────────────
+
+  Middleware/ExceptionHandlingMiddleware.cs
+    Positioned FIRST in the pipeline so it catches all downstream exceptions.
+    Returns RFC 7807 Problem Details JSON: { type, title, status, detail,
+    traceId }.
+    Logs exception with structured logging (ILogger<ExceptionHandlingMiddleware>).
+    Always returns HTTP 500; specific domain errors flow via Result<T> / MapError
+    before reaching this middleware.
+
+  Middleware/TenancyMiddleware.cs
+    Positioned AFTER UseAuthentication() and UseAuthorization() so
+    HttpContext.User.Claims are populated.
+    For authenticated requests: reads sub claim (ClaimTypes.NameIdentifier or
+    "sub") and property_id claim; calls
+    ((CurrentPropertyContext)ctx).SetContext(propertyId, userId).
+    Returns 401 + errorCode "Auth.MissingPropertyClaim" if either claim is
+    absent on an authenticated request.
+    Passes through anonymously for unauthenticated requests (AllowAnonymous
+    endpoints like /auth/register, /auth/login).
+
+── Controllers/ ─────────────────────────────────────────────────────────────────
+
+  Controllers/ApiControllerBase.cs
+    Abstract base class. Annotated: [ApiController] [Authorize]
+    [Route("api/v1/[controller]")].
+    Protected IMediator Mediator property (constructor-injected).
+    Protected IActionResult MapError(Error error) — maps Error.Code patterns
+    to HTTP status codes:
+      *.NotFound               → 404
+      *.AccessDenied           → 403
+      Auth.* (invalid creds,
+      email registered, etc.) → 401
+      *.InvalidStatusTransition,
+      *.CannotSetBusy         → 422 Unprocessable Entity
+      Validation.Failed       → 400
+      (default)               → 400
+
+  Controllers/AuthController.cs
+    Route: [Route("api/v1/auth")]
+    POST /api/v1/auth/register   [AllowAnonymous] → RegisterResidentCommand
+                                  Returns 201 Created + AuthTokenDto
+    POST /api/v1/auth/login      [AllowAnonymous] → LoginCommand
+                                  Returns 200 OK + AuthTokenDto
+
+  Controllers/ComplaintsController.cs
+    Route: [Route("api/v1/complaints")]
+    Injects BOTH IMediator AND IStorageService (only controller that does so —
+    required by the media upload pattern).
+    Media validation: max 20 MB per file; allowed MIME types: image/jpeg,
+    image/png, image/gif, image/webp, video/mp4.
+    Routes (declared in this order to avoid ASP.NET routing ambiguity):
+      GET  /complaints/my          [Resident]         → GetComplaintsByResidentQuery
+      POST /complaints/sos         [Resident]      201 → TriggerSosCommand
+      POST /complaints             [Resident]      201 → SubmitComplaintCommand
+                                    multipart/form-data — files uploaded to blob
+                                    storage, URL list passed to command
+      GET  /complaints             [Manager]          → GetAllComplaintsQuery
+      GET  /complaints/{id}        [all roles]        → GetComplaintByIdQuery
+      POST /complaints/{id}/assign    [Manager]       → AssignComplaintCommand
+      POST /complaints/{id}/reassign  [Manager]       → AssignComplaintCommand
+      POST /complaints/{id}/status    [Staff]     501  (stub — Phase 4)
+      POST /complaints/{id}/resolve   [Staff]          → ResolveComplaintCommand
+                                    multipart/form-data for completion photos
+      POST /complaints/{id}/feedback  [Resident]      → SubmitFeedbackCommand
+      POST /complaints/{id}/work-notes [Staff]    201 → AddWorkNoteCommand
+      POST /complaints/{id}/eta       [Staff]         → UpdateEtaCommand
+
+  Controllers/StaffController.cs
+    Route: [Route("api/v1/staff")]
+    Routes (GET /me and GET /available before GET /{id} to prevent ambiguity):
+      GET  /staff/me               [MaintenanceStaff] → GetMyStaffProfileQuery
+      GET  /staff/available        [Manager]          → GetAvailableStaffQuery
+      GET  /staff                  [Manager]          → GetAllStaffQuery
+      GET  /staff/{id}             [Manager]          → GetStaffByIdQuery
+      POST /staff/{id}/availability [MaintenanceStaff] → UpdateAvailabilityCommand
+
+  Controllers/DispatchController.cs
+    Route: [Route("api/v1/dispatch")]
+      GET /dispatch/recommendations/{complaintId} [Manager]
+          → GetDispatchRecommendationsQuery
+
+  Controllers/OutagesController.cs
+    Route: [Route("api/v1/outages")]
+      POST /outages     [Manager]    201 → DeclareOutageCommand
+      GET  /outages     [all roles]      → GetAllOutagesQuery
+      GET  /outages/{id} [all roles]     → GetOutageByIdQuery
+
+  Controllers/ReportsController.cs
+    Route: [Route("api/v1/reports")]
+    [Authorize(Roles="Manager")] at class level.
+      GET /reports/dashboard              → GetDashboardMetricsQuery
+      GET /reports/staff-performance      → GetStaffPerformanceQuery
+      GET /reports/unit-history/{unitId}  → GetComplaintsByUnitQuery
+      GET /reports/complaints-summary     → GetComplaintsSummaryQuery
+
+  Controllers/UsersController.cs
+    Route: [Route("api/v1/users")]
+    [Authorize(Roles="Manager")] at class level.
+      GET  /users                   → GetAllUsersQuery
+      POST /users/invite         201 → InviteResidentCommand
+      POST /users/{id}/deactivate   → DeactivateUserCommand
+      POST /users/{id}/reactivate   → ReactivateUserCommand
+
+── Program.cs ───────────────────────────────────────────────────────────────────
+
+  Composition root. Service registration order:
+    1. AddPersistence(config)          — EF Core DbContext, repositories
+    2. AddInfrastructure()             — auth, storage, reporting, dispatch
+    3. AddApplication()                — MediatR, validators, behaviours
+    4. AddScoped<CurrentPropertyContext>()
+       AddScoped<ICurrentPropertyContext>(sp => ...)   — tenant context
+
+    5. JWT Bearer Authentication
+       ValidateIssuer, ValidateAudience, ValidateLifetime, ValidateIssuerSigningKey
+       ClockSkew = TimeSpan.Zero (strict expiry)
+       Custom OnChallenge event → clean 401 JSON (no redirects)
+
+    6. AddAuthorization()
+
+    7. AddControllers().AddJsonOptions(...)
+       PropertyNamingPolicy = CamelCase
+       DefaultIgnoreCondition = WhenWritingNull
+
+    8. AddEndpointsApiExplorer() + AddSwaggerGen(...)
+       Swagger UI includes Bearer token input field
+
+  Middleware pipeline (mandatory order):
+    app.UseMiddleware<ExceptionHandlingMiddleware>()   ← FIRST
+    app.UseHttpsRedirection()
+    app.UseSwagger() / app.UseSwaggerUI()              ← dev only
+    app.UseAuthentication()                            ← populates User.Claims
+    app.UseAuthorization()                             ← evaluates [Authorize]
+    app.UseMiddleware<TenancyMiddleware>()              ← reads JWT claims
+    app.MapControllers()
+
+  public partial class Program { }  exposed for integration test
+  WebApplicationFactory<Program> bootstrapping.
+
+================================================================================
+BUILD & TEST RESULTS
+================================================================================
+
+  dotnet sln add operations
+  ─────────────────────────
+    backend/ACLS.Contracts/ACLS.Contracts.csproj   — already in solution
+    backend/ACLS.Api/ACLS.Api.csproj               — added successfully
+
+  dotnet build (entire solution — 9 projects)
+  ──────────────────────────────────────────
+  Build succeeded.
+    0 Error(s)
+    0 Warning(s)
+  All 9 projects compiled successfully:
+    ACLS.SharedKernel ✓  ACLS.Contracts ✓   ACLS.Domain ✓
+    ACLS.Application ✓   ACLS.Persistence ✓  ACLS.Infrastructure ✓
+    ACLS.Api ✓           Domain.Tests ✓      Application.Tests ✓
+
+  Issues encountered & resolved during build:
+    1. BlobStorageService missing DeleteAsync → IStorageService interface
+       required both UploadAsync and DeleteAsync.
+       Fix: added stub DeleteAsync (no-op, logs at Debug level).
+
+    2. DispatchController using wrong namespace
+       (ACLS.Application.Complaints.Queries.GetDispatchRecommendations).
+       Actual location: ACLS.Application.Dispatch.Queries.GetDispatchRecommendations.
+       Fix: corrected using directive.
+
+    3. MediaUploadResult type ambiguity in ComplaintsController.
+       SubmitComplaintCommand and ResolveComplaintCommand each declare a
+       top-level (not nested) MediaUploadResult record in their own namespaces.
+       Fix: added C# using aliases at the top of ComplaintsController.cs:
+         using SubmitMediaResult = ACLS.Application.Complaints.Commands.SubmitComplaint.MediaUploadResult;
+         using ResolveMediaResult = ACLS.Application.Complaints.Commands.ResolveComplaint.MediaUploadResult;
+
+    4. UpdateStatus action erroneously declared async (no await).
+       Fix: changed to Task<IActionResult> returning Task.FromResult(...).
+
+  dotnet test (entire solution)
+  ─────────────────────────────
+  Domain.Tests      — 27 / 27 passed ✓  (unchanged from Phase 2)
+  Application.Tests — 22 / 22 passed ✓  (unchanged from Phase 2)
+  (No new test project created in Phase 3 — integration tests deferred to Phase 4.)
+
+================================================================================
+KNOWN DEFERRED ITEMS (not bugs — deliberate phase boundary decisions)
+================================================================================
+
+  1. POST /complaints/{id}/status  →  returns HTTP 501
+     UpdateComplaintStatusCommand is not implemented. The status-transition
+     logic (ASSIGNED→EN_ROUTE, EN_ROUTE→IN_PROGRESS) is reserved for Phase 4
+     to keep Phase 3 scope on infrastructure wiring.
+
+  2. ResolveComplaintRequest.ResolutionNotes is bound but not forwarded
+     to ResolveComplaintCommand (which has no ResolutionNotes field).
+     Notes field will be wired when ResolveComplaintCommand is extended in
+     Phase 4.
+
+  3. ComplaintQueryOptions has no StaffMemberId or UnitId filter fields
+     despite v1.yaml listing them as GET /complaints query parameters.
+     Parameters are accepted by the controller but silently ignored — no
+     server error. Filter support deferred to Phase 4 (Persistence query
+     extension).
+
+  4. ReportingService is a stub returning empty lists.
+     Full SQL aggregation queries will be implemented in Phase 5 alongside
+     the background worker (ACLS.Worker).
+
+  5. BlobStorageService is a stub returning placeholder URLs.
+     Production implementation (Azure.Storage.Blobs SDK) deferred to Phase 5.
+
+  6. No appsettings.json / appsettings.Development.json created yet.
+     Required config keys: JwtSettings:Secret, JwtSettings:Issuer,
+     JwtSettings:Audience, BlobStorage:ContainerUrl, ConnectionStrings:Acls.
+     These are needed before the application can run end-to-end.
+
+================================================================================
+SOLUTION FILE STATE (after Phase 3)
+================================================================================
+
+  backend/ACLS.SharedKernel/ACLS.SharedKernel.csproj
+  backend/ACLS.Domain/ACLS.Domain.csproj
+  backend/ACLS.Application/ACLS.Application.csproj
+  backend/ACLS.Contracts/ACLS.Contracts.csproj
+  backend/ACLS.Persistence/ACLS.Persistence.csproj
+  backend/ACLS.Infrastructure/ACLS.Infrastructure.csproj
+  backend/ACLS.Api/ACLS.Api.csproj                       ← added this phase
+  tests/unit/Domain.Tests/Domain.Tests.csproj
+  tests/unit/Application.Tests/Application.Tests.csproj
+
+================================================================================
+PHASE 3 STATUS: COMPLETE ✅
+================================================================================
+  All API controllers, middleware, Program.cs, and supporting Application/
+  Infrastructure additions created.
+  Solution builds with 0 errors, 0 warnings across all 9 projects.
+  All 49 existing tests continue to pass.
+  Repository is ready for Phase 4 (integration tests, UpdateStatusCommand,
+  and appsettings configuration).
+================================================================================

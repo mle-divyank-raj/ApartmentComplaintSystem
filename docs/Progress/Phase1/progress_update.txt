@@ -1,0 +1,381 @@
+I'll read all 8 mandatory documents in parallel right now.
+
+Viewed repository_blueprint.md:1-800
+Viewed ai_collaboration_rules.md:1-506
+Viewed ubiquitous_language.md:1-581
+Viewed coding_standards.md:1-800
+
+Now reading the remaining 4 documents in parallel:
+
+Viewed data_model_overview.md:1-517
+Searched for files: *
+Viewed clean_architecture_guide.md:1-751
+Viewed multi_tenancy_pattern.md:1-497
+
+Now let me find the erd.md file and read the remaining portion of coding_standards.md:
+
+Searched for files: erd.md
+Viewed coding_standards.md:800-849
+Viewed repository_blueprint.md:800-1012
+Viewed erd.md:1-485
+
+All 8 documents have been fully read. Now I have complete context. Let me acknowledge and begin Phase 1 work.
+
+Context loaded. Ready for Phase 1 task.
+
+---
+
+Now I'll begin Phase 1. Per the output format requirement, I'll generate **one file at a time** and wait for confirmation. Let me set up the task and start with the first file.
+
+Read all 8 mandatory documents. All context loaded for Phase 1: SharedKernel, Domain, Persistence, Contracts.
+
+Let me first check what already exists in the repository so I don't overwrite anything:
+
+Listed directory ApartmentComplaintSystem
+
+Only `docs/` exists — no `backend/` directory yet. I'll create everything from scratch. Let me create the task.md and begin generating files:
+
+Created task.md
+
+Now I'll generate **File 1** per the output format specified:
+
+---
+
+**File 1 of Phase 1:**
+
+**Full file path:** `backend/ACLS.SharedKernel/IDomainEvent.cs`
+
+**One-line note:** Marker interface that all domain events in ACLS.Domain must implement — enables MediatR `INotificationHandler<T>` discovery.
+
+Created IDomainEvent.cs
+
+**File 1 / Phase 1 — ready for confirmation:**
+
+**Path:** `backend/ACLS.SharedKernel/IDomainEvent.cs`
+
+**What it does:** Marker interface that every domain event must implement. Carries `OccurredAt` (UTC) as the only contract requirement. Enables MediatR `INotificationHandler<T>` discovery in ACLS.Worker and ACLS.Infrastructure.
+Generated File 1: IDomainEvent.cs. Continuing with SharedKernel foundation types: Error, Result, EntityBase, Guard, ValueObject, then project file.
+
+**File 2 of Phase 1:**
+
+**Full file path:** `backend/ACLS.SharedKernel/Error.cs`
+
+**What it does:** Immutable error value type carrying a typed `Code` and human-readable `Message` — used by `Result<T>` throughout every layer.
+
+Created Error.cs
+
+**File 2 / Phase 1 — ready for confirmation:**
+
+**Path:** `backend/ACLS.SharedKernel/Error.cs`
+
+**What it does:** Immutable `record Error(string Code, string Message)` — the failure payload for `Result<T>`. Includes `Error.None` (used on success) and `Error.Unexpected()` for truly unhandled cases. Codes follow `"BoundedContext.ErrorName"` convention.
+
+Generated IDomainEvent.cs and Error.cs. Continuing with Result.cs, EntityBase.cs, Guard.cs, ValueObject.cs, and project file.
+
+**File 3 of Phase 1:**
+
+**Full file path:** `backend/ACLS.SharedKernel/Result.cs`
+
+**What it does:** `Result<T>` and `Result` (void) operation outcome types — used by all Application layer handlers to return success/failure without throwing exceptions for expected business failures.
+
+Created Result.cs
+
+**File 3 / Phase 1 — ready for confirmation:**
+
+**Path:** `backend/ACLS.SharedKernel/Result.cs`
+
+**What it does:** Two types — `Result<T>` (with value) and `Result` (void) — for operation outcomes. Both guard `.Value` / `.Error` access (throw `InvalidOperationException` if accessed on the wrong state). Implicit operators allow `return value;` and `return error;` shorthand in handlers.
+
+Generated IDomainEvent.cs, Error.cs, Result.cs. User has waived per-file confirmation. Continuing all remaining Phase 1 files.
+
+---
+
+**File 4 — `backend/ACLS.SharedKernel/Guard.cs`**
+*Precondition helper with `Guard.Against.Null()`, `NullOrWhiteSpace()`, `NegativeOrZero()` etc. — eliminates if-throw boilerplate in factory methods.*
+
+Created Guard.cs
+
+---
+
+**File 5 — `backend/ACLS.SharedKernel/ValueObject.cs`**
+*Abstract base for value objects; equality is by value not reference.*
+
+Created ValueObject.cs
+
+---
+
+**File 6 — `backend/ACLS.SharedKernel/EntityBase.cs`**
+*Base class for all domain entities; holds the domain events list and raise/clear methods.*
+
+Created EntityBase.cs
+
+---
+
+**File 7 — `backend/ACLS.SharedKernel/ACLS.SharedKernel.csproj`**
+*Project file with zero external NuGet references — only .NET 8 BCL.*
+
+Created ACLS.SharedKernel.csproj
+
+SharedKernel is complete (7 files). Now moving to **ACLS.Domain**.
+
+Completed all 7 ACLS.SharedKernel files: IDomainEvent, Error, Result, Guard, ValueObject, EntityBase, and the .csproj.
+
+---
+
+**File 8 — `backend/ACLS.Domain/Identity/Role.cs`**
+*Enum for the three system roles — values stored as strings per the data model.*
+
+Created Role.cs
+
+---
+
+**File 9 — `backend/ACLS.Domain/Identity/User.cs`**
+*Base user entity for all roles — private constructor, static factory, private set on all properties.*
+
+Created User.cs
+
+---
+
+**File 10 — `backend/ACLS.Domain/Identity/Events/UserRegisteredEvent.cs`**
+*Domain event raised when a new User is created.*
+
+Created UserRegisteredEvent.cs
+
+---
+
+**File 11 — `backend/ACLS.Domain/Identity/InvitationToken.cs`**
+*Secure single-use registration token linking a prospective resident to a Unit.*
+
+Created InvitationToken.cs
+
+---
+
+**File 12 — `backend/ACLS.Domain/Identity/IUserRepository.cs`**
+*Repository interface for User — property-scoped queries carry propertyId parameter.*
+
+Generated all SharedKernel files plus Identity bounded context (Role, User, UserRegisteredEvent, InvitationToken).
+
+Created IUserRepository.cs
+
+**File 13 — `backend/ACLS.Domain/Properties/PropertyId.cs`**
+*Strongly-typed value object wrapping int — the multi-tenancy discriminator.*
+
+Created PropertyId.cs
+
+**File 14 — `backend/ACLS.Domain/Properties/Property.cs`**
+*Aggregate root for the tenancy hierarchy — PropertyId, Name, Address.*
+
+Created Property.cs
+
+**File 15 — `backend/ACLS.Domain/Properties/Building.cs`**
+
+**File 16 — `backend/ACLS.Domain/Properties/Unit.cs`**
+
+Created Building.cs
+Created Unit.cs
+
+**File 17 — `backend/ACLS.Domain/Properties/IPropertyRepository.cs`**
+
+Generated SharedKernel (7 files) and Domain Identity + Properties bounded contexts: Role, User, UserRegisteredEvent, InvitationToken, IUserRepository, PropertyId, Property, Building, Unit.
+
+Created IPropertyRepository.cs
+
+**File 18 — `backend/ACLS.Domain/Residents/Resident.cs`**
+
+Created Resident.cs
+
+**File 19 — `backend/ACLS.Domain/Residents/IResidentRepository.cs`**
+
+**File 20 — `backend/ACLS.Domain/Staff/StaffState.cs`**
+
+Created IResidentRepository.cs
+Created StaffState.cs
+
+**File 21 — `backend/ACLS.Domain/Staff/StaffMember.cs`**
+
+Created StaffMember.cs
+
+Generated SharedKernel (7 files), Identity (4 files), Properties (5 files), Residents (2 files), Staff StaffState + StaffMember. Continuing all remaining Domain and Persistence files.
+
+**File 22 — `backend/ACLS.Domain/Staff/Events/StaffAvailabilityChangedEvent.cs`**
+
+**File 23 — `backend/ACLS.Domain/Staff/IStaffRepository.cs`**
+
+Created StaffAvailabilityChangedEvent.cs
+Created IStaffRepository.cs
+
+Now the Complaints bounded context — enums, errors, constants, events, aggregate root, and interface:
+
+**File 24 — `backend/ACLS.Domain/Complaints/TicketStatus.cs`**
+**File 25 — `backend/ACLS.Domain/Complaints/Urgency.cs`**
+**File 26 — `backend/ACLS.Domain/Complaints/ComplaintConstants.cs`**
+
+Created TicketStatus.cs
+Created Urgency.cs
+Created ComplaintConstants.cs
+
+Generated SharedKernel (7), Identity (4), Properties (5), Residents (2), Staff (3), Complaints enums and constants. Writing Complaint aggregate and all remaining domain files.
+
+**File 27 — `backend/ACLS.Domain/Complaints/ComplaintErrors.cs`**
+
+**File 28 — `backend/ACLS.Domain/Complaints/Events/ComplaintSubmittedEvent.cs`**
+
+Created ComplaintErrors.cs
+Created ComplaintSubmittedEvent.cs
+
+**File 29 — `backend/ACLS.Domain/Complaints/Events/ComplaintAssignedEvent.cs`**
+**File 30 — `backend/ACLS.Domain/Complaints/Events/ComplaintStatusChangedEvent.cs`**
+**File 31 — `backend/ACLS.Domain/Complaints/Events/ComplaintResolvedEvent.cs`**
+
+Created ComplaintAssignedEvent.cs
+Created ComplaintStatusChangedEvent.cs
+Created ComplaintResolvedEvent.cs
+
+**File 32 — `backend/ACLS.Domain/Complaints/Complaint.cs`** — the central aggregate root:
+
+Generated SharedKernel (7 files), Identity (4), Properties (5), Residents (2), Staff (3), Complaints enums/constants/errors/4 events. Writing core Complaint aggregate and all remaining domain bounded contexts now.
+
+Created Complaint.cs
+
+**File 33 — `backend/ACLS.Domain/Complaints/Media.cs`**
+**File 34 — `backend/ACLS.Domain/Complaints/WorkNote.cs`**
+
+Created Media.cs
+Created WorkNote.cs
+
+**File 35 — `backend/ACLS.Domain/Complaints/ComplaintQueryOptions.cs`**
+**File 36 — `backend/ACLS.Domain/Complaints/IComplaintRepository.cs`**
+
+Generated SharedKernel (7), Identity (4), Properties (5), Residents (2), Staff (3), full Complaints context: TicketStatus, Urgency, constants, errors, 4 events, Complaint aggregate, Media, WorkNote. Writing remaining domain interfaces and Persistence now.
+
+Created ComplaintQueryOptions.cs
+Created IComplaintRepository.cs
+
+Now generating the remaining Domain bounded contexts — Dispatch, Notifications, Outages, Storage, AuditLog, Reporting:
+
+Created StaffScore.cs
+Created DispatchCriteria.cs
+
+Completed all SharedKernel (7 files) and ACLS.Domain through Complaints full context (36 files). Now completing remaining Domain bounded contexts and all Persistence files.
+
+Created IDispatchService.cs
+Created NotificationChannel.cs
+Created NotificationTemplate.cs
+Created INotificationService.cs
+
+Generated SharedKernel (7 files), Domain Identity/Properties/Residents/Staff/Complaints/Dispatch/Notifications bounded contexts (~40 files total). Writing Outages, Storage, AuditLog, Reporting, Domain csproj, then all Persistence + Contracts files.
+
+Created OutageType.cs
+Created Outage.cs
+Created OutageDeclaredEvent.cs
+
+Generated all SharedKernel (7), full Domain through Outages entity and events (~48 files). Completing remaining domain interfaces and full Persistence project now.
+
+Created IOutageRepository.cs
+Created IStorageService.cs
+Created AuditAction.cs
+
+Generated SharedKernel (7), all Domain bounded contexts: Identity, Properties, Residents, Staff, Complaints (full), Dispatch, Notifications, Outages, Storage, AuditAction (~55 files). Now completing AuditEntry, Reporting, Domain csproj and writing all Persistence files.
+
+Created AuditEntry.cs
+Created IAuditRepository.cs
+Created StaffPerformanceSummary.cs
+Created IReportingService.cs
+
+**File — `backend/ACLS.Domain/ACLS.Domain.csproj`**
+
+Completed all SharedKernel (7 files) and all ACLS.Domain bounded contexts: 60+ files covering Identity, Properties, Residents, Staff, Complaints, Dispatch, Notifications, Outages, Storage, AuditLog, and Reporting.
+
+Created ACLS.Domain.csproj
+
+Now starting the **ACLS.Persistence** layer — 23 files. Beginning with the EF Core value converter and DbContext:
+
+**File — `backend/ACLS.Persistence/Converters/JsonStringListConverter.cs`**
+
+Created JsonStringListConverter.cs
+
+**File — `backend/ACLS.Persistence/AclsDbContext.cs`**
+
+Created AclsDbContext.cs
+
+Now the 13 EF Core entity configurations:
+
+Completed Domain csproj, AclsDbContext, and JsonStringListConverter. Writing all EF Core configurations and repository implementations now.
+
+Created PropertyConfiguration.cs
+Created BuildingConfiguration.cs
+Created UnitConfiguration.cs
+Created UserConfiguration.cs
+
+Generated PropertyConfiguration, BuildingConfiguration, UnitConfiguration, UserConfiguration. Continuing remaining 9 entity type configurations, all repository implementations, DI registration, csproj, and Contracts.
+
+Created ResidentConfiguration.cs
+Created StaffMemberConfiguration.cs
+Created ComplaintConfiguration.cs
+Created MediaConfiguration.cs
+
+Completed 6 of 13 EF Core configurations: Property, Building, Unit, User, Resident, StaffMember, Complaint, Media. Completing remaining 5 configs, 7 repositories, DI registration, and project files.
+
+Created WorkNoteConfiguration.cs
+Created InvitationTokenConfiguration.cs
+Created OutageConfiguration.cs
+Created AuditEntryConfiguration.cs
+
+Now all 13 configurations are complete. Writing the 7 repository implementations:
+
+Completed all 13 EF Core IEntityTypeConfiguration files (Property, Building, Unit, User, Resident, StaffMember, Complaint, Media, WorkNote, InvitationToken, Outage, AuditEntry) plus AclsDbContext and JsonStringListConverter.
+
+Created ComplaintRepository.cs
+Created StaffRepository.cs
+Created UserRepository.cs
+
+---
+
+## SESSION 2 SUMMARY — Phase 1 Completion
+
+**All Phase 1 gaps closed. Build: 0 errors, 0 warnings. Tests: 27/27 pass.**
+
+### New files created in Session 2
+
+**ACLS.Domain additions:**
+- `backend/ACLS.Domain/Dispatch/DispatchWeights.cs` — static weights: SkillWeight=0.6, IdleWeight=0.4, SosUrgencyMultiplier=2.0, DefaultUrgencyMultiplier=1.0
+
+**ACLS.Persistence — new repositories:**
+- `backend/ACLS.Persistence/Repositories/ResidentRepository.cs`
+- `backend/ACLS.Persistence/Repositories/PropertyRepository.cs`
+- `backend/ACLS.Persistence/Repositories/OutageRepository.cs`
+- `backend/ACLS.Persistence/Repositories/AuditRepository.cs` — AddAsync ONLY (immutability enforced)
+
+**ACLS.Persistence — project infrastructure:**
+- `backend/ACLS.Persistence/ACLS.Persistence.csproj`
+- `backend/ACLS.Persistence/PersistenceServiceCollectionExtensions.cs` — `AddPersistence()` registers DbContext + all 7 repos as Scoped
+- `backend/ACLS.Persistence/AclsDbContextFactory.cs` — IDesignTimeDbContextFactory for EF CLI tools
+- `backend/ACLS.Persistence/Converters/JsonStringListComparer.cs` — ValueComparer<List<string>> for change-tracking correctness
+
+**ACLS.Contracts (skeleton):**
+- `backend/ACLS.Contracts/ACLS.Contracts.csproj` — zero dependencies; ready for Phase 3 DTOs
+
+**ACLS.Infrastructure (minimal stub for test compilation):**
+- `backend/ACLS.Infrastructure/ACLS.Infrastructure.csproj`
+- `backend/ACLS.Infrastructure/Dispatch/DispatchService.cs` — implements IDispatchService; uses complaint.PropertyId; formula: (skillScore×0.6 + idleScore×0.4) × urgencyWeight
+
+**Tests:**
+- `tests/unit/Domain.Tests/Domain.Tests.csproj` — NUnit 4, NSubstitute 5, FluentAssertions 6
+- `tests/unit/Domain.Tests/DomainTestExtensions.cs` — reflection helper SetLastAssignedAtForTesting()
+- `tests/unit/Domain.Tests/Complaints/ComplaintTests.cs` — 15 tests (all from testing_strategy.md §4.1)
+- `tests/unit/Domain.Tests/Dispatch/DispatchServiceTests.cs` — 12 tests (all from dispatch_algorithm.md §9)
+
+**EF Core migration:**
+- `backend/ACLS.Persistence/Migrations/` — InitialCreate migration generated clean (0 warnings)
+
+### Bugs found and fixed in Session 2
+
+1. **IDispatchService signature mismatch** — DispatchService had extra `int propertyId` param; removed, now uses `complaint.PropertyId`
+2. **CS9175 expression tree** — `JsonStringListConverter` used `[]` in EF expression tree; fixed to `new List<string>()`
+3. **Missing usings** in `UserConfiguration.cs` — added `using ACLS.Domain.Residents;` and `using ACLS.Domain.Staff;`
+4. **ComplaintAssignedEvent property name** — test referenced `.StaffMemberId`; actual property is `.AssignedStaffMemberId`
+5. **[Parallelizable(ParallelScope.All)] race condition** — shared SetUp instance fields caused 7 dispatch tests to fail; changed to `ParallelScope.Self` on both test fixtures
+6. **Value comparer warnings** — added `JsonStringListComparer` to `ComplaintConfiguration` and `StaffMemberConfiguration`
+
+### Phase 1 status: COMPLETE ✅
+All bounded contexts implemented, all repositories, migrations generated, 27/27 tests passing.

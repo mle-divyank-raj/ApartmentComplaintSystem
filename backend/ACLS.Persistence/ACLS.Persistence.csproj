@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.Persistence</RootNamespace>
+    <AssemblyName>ACLS.Persistence</AssemblyName>
+    <!--
+      DEPENDENCY RULE (Clean Architecture):
+      ACLS.Persistence may reference ACLS.Domain and ACLS.SharedKernel.
+      Must NOT reference ACLS.Api or ACLS.Infrastructure.
+      EF Core lives here — never in Domain or Application.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACLS.Domain\ACLS.Domain.csproj" />
+    <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

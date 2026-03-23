@@ -1,0 +1,8 @@
+export enum TicketStatus {
+  OPEN = "OPEN",
+  ASSIGNED = "ASSIGNED",
+  EN_ROUTE = "EN_ROUTE",
+  IN_PROGRESS = "IN_PROGRESS",
+  RESOLVED = "RESOLVED",
+  CLOSED = "CLOSED",
+}

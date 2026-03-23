@@ -1,0 +1,479 @@
+PHASE 4a — Manager Dashboard (ResidentApp.Web) — Progress Update
+==================================================================
+Date: 2026-03-20 (compliance pass applied)
+Status: COMPLETE ✅ + COMPLIANCE PASS ✅
+Build: 0 errors, 0 TypeScript errors
+
+---
+
+SCOPE
+-----
+Phase 4a built the complete Next.js 14 Manager Dashboard frontend as an npm
+workspace monorepo. Three shared packages were created alongside the web app:
+
+  @acls/shared-types   — TypeScript enum mirror of C# backend enums
+  @acls/api-contracts  — TypeScript interfaces for all request/response DTOs
+  @acls/sdk            — Axios HTTP client with JWT Bearer interceptor
+  apps/ResidentApp.Web — Next.js 14 App Router manager dashboard
+
+No business logic lives on the client. All state flows from the ACLS.API backend
+via the lib/api layer. Components are pure rendering and event delegation.
+
+---
+
+MONOREPO STRUCTURE
+------------------
+Root package.json configures npm workspaces:
+  "workspaces": ["packages/*", "apps/*"]
+
+  packages/
+    shared-types/           @acls/shared-types
+    api-contracts/          @acls/api-contracts
+    sdk/                    @acls/sdk
+  apps/
+    ResidentApp.Web/        resident-app-web
+
+npm install --workspaces: 130 packages installed successfully.
+
+---
+
+PACKAGES CREATED
+----------------
+
+  1. packages/shared-types/ (@acls/shared-types)
+     ├── package.json
+     ├── tsconfig.json
+     └── src/
+         ├── enums/TicketStatus.ts    OPEN | ASSIGNED | EN_ROUTE | IN_PROGRESS | RESOLVED | CLOSED
+         ├── enums/Urgency.ts         LOW | MEDIUM | HIGH | SOS_EMERGENCY
+         ├── enums/StaffState.ts      AVAILABLE | BUSY | ON_BREAK | OFF_DUTY
+         ├── enums/OutageType.ts      Electricity | Water | Gas | Internet | Elevator | Other
+         └── index.ts                 re-exports all enums
+
+  2. packages/api-contracts/ (@acls/api-contracts)
+     ├── package.json
+     ├── tsconfig.json
+     └── src/
+         ├── auth.ts       RegisterResidentRequest, LoginRequest, AuthTokenResponse
+         ├── complaints.ts MediaDto, WorkNoteDto, StaffMemberSummaryDto, ComplaintDto,
+         │                 ComplaintsPage, SubmitComplaintRequest, TriggerSosRequest,
+         │                 AssignComplaintRequest, UpdateComplaintStatusRequest,
+         │                 ResolveComplaintRequest, SubmitFeedbackRequest,
+         │                 AddWorkNoteRequest, UpdateEtaRequest
+         ├── staff.ts      StaffMemberDto, StaffMemberWithAssignmentsDto,
+         │                 UpdateAvailabilityRequest
+         ├── dispatch.ts   StaffScoreDto, DispatchRecommendationsResponse
+         ├── outages.ts    DeclareOutageRequest, OutageDto
+         ├── reports.ts    ActiveAssignmentDto, DashboardMetricsDto,
+         │                 StaffPerformanceSummaryDto
+         ├── users.ts      UserDto, InviteResidentRequest, InvitationDto
+         └── index.ts      re-exports all types
+
+  3. packages/sdk/ (@acls/sdk)
+     ├── package.json
+     ├── tsconfig.json
+     └── src/
+         ├── apiClient.ts  Axios instance, JWT Bearer request interceptor (reads
+         │                 TOKEN_STORAGE_KEY="acls_access_token" from localStorage),
+         │                 401 response interceptor (clears token → redirects /login),
+         │                 storeToken / getStoredToken / clearToken helpers,
+         │                 base URL from process.env.NEXT_PUBLIC_API_URL
+         └── index.ts
+
+---
+
+APPS/RESIDENTAPP.WEB FILES CREATED
+-----------------------------------
+
+Config files (root of apps/ResidentApp.Web/):
+  package.json          Next.js 14.2.35, React 18, Tailwind 3, axios, @acls/* deps
+  tsconfig.json         strict mode, paths: @acls/*, @/* → ./src/*
+  next.config.mjs       reactStrictMode: true, transpilePackages for @acls/*
+  tailwind.config.ts    content: src/**/*.{ts,tsx}
+  postcss.config.mjs    autoprefixer
+  .env.local            NEXT_PUBLIC_API_URL=http://localhost:5000  [gitignored]
+  .gitignore            .next/, node_modules/, .env.local, .env.*.local
+
+src/app/ (Next.js App Router):
+  globals.css                               Tailwind directives (@tailwind base/components/utilities)
+  layout.tsx                                Root HTML layout wrapper
+  page.tsx                                  Redirects / → /dashboard
+  login/page.tsx           [use client]     Login form, calls login() + storeSession(), redirects /dashboard
+  (dashboard)/layout.tsx                    Sidebar + scrollable <main> wrapper for all dashboard routes
+  (dashboard)/dashboard/page.tsx            Fetches getDashboardMetrics(), renders MetricsCards +
+                                            ActiveAssignments + StaffAvailabilitySummary
+  (dashboard)/complaints/page.tsx           Paginated complaint list (PAGE_SIZE=20) with status/urgency filters
+  (dashboard)/complaints/[id]/page.tsx      Full complaint detail; Assign/Reassign buttons open AssignDialog
+  (dashboard)/staff/page.tsx                Fetches getAllStaff(), renders StaffTable
+  (dashboard)/staff/[id]/page.tsx           Fetches getStaffById(), shows profile card + active assignments
+  (dashboard)/outages/page.tsx              Fetches getAllOutages(), shows outage cards, link to /outages/new
+  (dashboard)/outages/new/page.tsx [client] Form to declareOutage(), redirects /outages on success
+  (dashboard)/reports/page.tsx              Fetches getStaffPerformance(), renders performance table
+  (dashboard)/users/page.tsx    [client]    Fetches getAllUsers(), deactivate/reactivate per user,
+                                            inline invite-resident form
+
+src/lib/:
+  auth.ts                  StoredSession interface, storeSession(), getSession(),
+                           isAuthenticated(), signOut()
+  api/auth.ts              login() — POST /api/v1/auth/login, stores JWT token
+  api/complaints.ts        getAllComplaints(), getComplaintById(), assignComplaint(),
+                           reassignComplaint(), resolveComplaint(), submitFeedback(),
+                           addWorkNote(), updateEta()
+  api/staff.ts             getAllStaff(), getAvailableStaff(), getStaffById(), getMyStaffProfile()
+  api/dispatch.ts          getDispatchRecommendations()
+  api/outages.ts           getAllOutages(), getOutageById(), declareOutage()
+  api/reports.ts           getDashboardMetrics(), getStaffPerformance(),
+                           getUnitHistory(), getComplaintsSummary()
+  api/users.ts             getAllUsers(), inviteResident(), deactivateUser(), reactivateUser()
+  api/index.ts             re-exports all API functions
+
+src/components/:
+  ui/Button.tsx            variants: primary/secondary/danger/ghost; sizes: sm/md/lg; loading prop
+  ui/Card.tsx              white rounded border card with padding variants
+  ui/Badge.tsx             colored pill badge (gray/blue/green/yellow/orange/red/purple)
+  ui/StatusBadge.tsx       maps TicketStatus enum → Badge colour
+  ui/UrgencyBadge.tsx      maps Urgency enum → Badge colour
+  ui/LoadingSpinner.tsx    centered Tailwind spinner with optional label
+  ui/ErrorAlert.tsx        red alert box for API error display
+  layout/Sidebar.tsx [client]  fixed 240px nav sidebar, active route highlight, sign-out button
+  complaints/ComplaintTable.tsx   full table with Link to /complaints/{id}
+  complaints/ComplaintFilters.tsx [client] status + urgency <select> populated from enums
+  complaints/AssignDialog.tsx [client]     modal — loads dispatch recommendations, assign/reassign call
+  dashboard/MetricsCard.tsx               single stat card with accent colour band
+  dashboard/ActiveAssignments.tsx         list of ActiveAssignmentDto with complaint links
+  dashboard/StaffAvailabilitySummary.tsx  list of staff summary DTOs
+  staff/StaffTable.tsx                    full table with skill badges, availability badge, link to /staff/{id}
+
+---
+
+KEY DECISIONS
+-------------
+
+1. next.config.mjs (not .ts)
+   Next.js 14 does not support next.config.ts (that was introduced in v15).
+   The file was named next.config.ts during initial generation; it was renamed
+   to .bak and replaced with next.config.mjs before the build.
+
+2. OutageType enum casing
+   v1.yaml defines OutageType values as PascalCase (Electricity, Water, Gas, …).
+   The TypeScript enum uses those exact string values — not SCREAMING_SNAKE_CASE —
+   so the frontend payload matches what the API sends and accepts.
+
+3. transpilePackages
+   @acls/* packages ship TypeScript source, not compiled JS. next.config.mjs sets
+   transpilePackages so Next.js compiles them inline — no separate tsc build step
+   needed for workspace packages.
+
+4. design_system.md compliance (retroactive)
+   docs/08_UX/design_system.md was added after Phase 4a was originally completed.
+   A compliance pass was applied on 2026-03-20 to align colours, icons, layout,
+   and component behaviour with the design system. See COMPLIANCE PASS section.
+
+5. Auth strategy
+   JWT stored in localStorage under key "acls_access_token". The SDK interceptor
+   attaches it as Bearer on every outgoing request. On 401, token is cleared and
+   browser is redirected to /login. No server-side cookie / middleware auth was
+   added (all pages use client-side isAuthenticated() check via useEffect).
+
+6. No business logic on client
+   Per ai_collaboration_rules.md Rule 1 (thin frontends): components contain only
+   rendering and user-event delegation. All data transformation and validation is
+   handled by the backend. The frontend trusts API responses directly.
+
+---
+
+VERIFICATION RESULTS
+--------------------
+
+TypeScript typecheck (tsc --noEmit):
+  Exit code: 0 — zero errors
+
+Next.js production build (next build):
+  Exit code: 0 — zero errors
+
+  Route                    Type
+  /                        Static
+  /_not-found              Static
+  /complaints              Static
+  /complaints/[id]         Dynamic (SSR on demand)
+  /dashboard               Static
+  /login                   Static
+  /outages                 Static
+  /outages/new             Static
+  /reports                 Static
+  /staff                   Static
+  /staff/[id]              Dynamic (SSR on demand)
+  /users                   Static
+
+  First Load JS shared: 87.3 kB
+  Largest page: /complaints/[id] — 113 kB first load
+
+---
+
+SECURITY NOTE
+-------------
+next@14.2.35 still carries high-severity CVEs affecting all versions ≤15.5.13:
+  - DoS via Image Optimizer remotePatterns (GHSA-9g9p-9gw9-jx7f)
+  - HTTP request deserialization DoS with React Server Components (GHSA-h25m-26qc-wcjf)
+  - HTTP request smuggling in rewrites (GHSA-ggv3-7p47-pfv8)
+  - Unbounded next/image disk cache growth (GHSA-3x4c-7xq6-9pq8)
+
+npm audit fix --force would upgrade to next@16.x (breaking changes). Upgrading
+to Next.js 15 or 16 is recommended before production deployment.
+
+---
+
+DEFERRED ITEMS
+--------------
+- Next.js 15/16 upgrade (breaking change — defer to Phase 4b planning)
+- Route guard middleware (src/middleware.ts) for server-side JWT verification
+  Currently all auth checks are client-side (useEffect + isAuthenticated())
+- ResidentApp.Web (resident-facing portal) — separate app, out of scope for 4a
+- Unit / integration tests for components and lib/api
+
+---
+
+IMMEDIATE NEXT STEPS TO RUN THE APP
+-------------------------------------
+1. Ensure ACLS.API is running:
+   cd backend/ACLS.API
+   dotnet run
+   (listens on http://localhost:5000 by default)
+
+2. Start the Next.js dev server:
+   cd apps/ResidentApp.Web
+   npm run dev
+   (opens http://localhost:3000)
+
+3. Login with a manager/admin account to reach the dashboard.
+
+================================================================================
+COMPLIANCE PASS — 2026-03-20
+================================================================================
+
+TRIGGER
+-------
+Two new documents were added after Phase 4a was originally completed:
+  1. docs/08_UX/design_system.md         (colour tokens, icons, layout, components)
+  2. docs/08_UX/user_flows/manager_assign_flow.md  (assign UX, error handling, outage flow)
+
+A comparative analysis identified 22 gaps between the existing code and the new
+specifications. All 22 were resolved. TypeScript typecheck passes with 0 errors.
+
+---
+
+NEW PACKAGE CREATED
+-------------------
+
+  packages/error-codes/ (@acls/error-codes)
+  ├── package.json
+  ├── tsconfig.json
+  └── src/
+      └── index.ts   ErrorCodes constant (Auth:11, Complaint:13, Staff:3, User:4,
+                      Outage:3, Dispatch:1, Validation:1, System:3 error codes)
+                      + ErrorCode type
+  Source: docs/05_API/error_codes.md §4
+
+---
+
+NEW DEPENDENCIES ADDED
+----------------------
+
+  @acls/error-codes          workspace:*
+  @tanstack/react-query      ^5
+  @tanstack/react-table      ^8
+  react-hook-form            ^7
+  zod                        ^3
+  lucide-react               ^0.400
+  recharts                   ^2
+  date-fns                   ^3
+
+  npm install: 182 packages audited, 46 new packages added.
+
+---
+
+CHANGES — COLOUR TOKENS (tailwind.config.ts)
+---------------------------------------------
+
+  BEFORE (generic Tailwind blues):
+    primary: { 50, 100, 500, 600, 700 } (blue shades)
+
+  AFTER (design_system.md §2 tokens):
+    primary:            '#185FA5'
+    primary-foreground: '#FFFFFF'
+    destructive:        '#A32D2D'
+    warning:            '#854F0B'
+    success:            '#3B6D11'
+    muted:              '#888780'
+    border:             '#D3D1C7'
+    background:         '#F1EFE8'
+    card:               '#FFFFFF'
+
+  All 20+ references to primary-500/primary-600/primary-700 across 7 files were
+  migrated to the flat primary token.
+
+  Files updated:
+    - tailwind.config.ts              (token definition)
+    - components/ui/Button.tsx         (bg-primary-600 → bg-primary)
+    - app/login/page.tsx               (focus:border-primary-500 → focus:border-primary)
+    - components/complaints/ComplaintTable.tsx   (text-primary-600 → text-primary)
+    - components/dashboard/ActiveAssignments.tsx (text-primary-600 → text-primary)
+    - components/staff/StaffTable.tsx            (text-primary-600 → text-primary)
+    - app/(dashboard)/complaints/[id]/page.tsx   (text-primary-600 → text-primary)
+    - app/(dashboard)/outages/new/page.tsx       (focus classes × 5 inputs)
+
+---
+
+CHANGES — BADGES
+-----------------
+
+  UrgencyBadge.tsx (rewritten):
+    - Removed Badge.tsx dependency, now uses inline <span> with Tailwind classes
+    - Prop type: string (accepts API DTO values), casts to Urgency for lookup
+    - Colours: LOW=green-50/800, MEDIUM=amber-50/800, HIGH=orange-50/800,
+      SOS_EMERGENCY=red-50/800 with "EMERGENCY" label and font-semibold
+
+  StatusBadge.tsx (rewritten):
+    - Removed Badge.tsx dependency, inline <span>
+    - Prop type: string (accepts API DTO values), casts to TicketStatus for lookup
+    - Fixed 3 wrong colour mappings:
+        OPEN:        yellow → blue-50/800
+        EN_ROUTE:    purple → indigo-50/800
+        IN_PROGRESS: orange → amber-50/800
+
+---
+
+CHANGES — LAYOUT
+-----------------
+
+  Sidebar.tsx (rewritten):
+    - Replaced all emoji icons with lucide-react imports (LayoutDashboard,
+      MessageSquare, Users, AlertTriangle, BarChart2, Settings, UserCog,
+      LogOut, ChevronDown, ChevronRight)
+    - Fixed routes: /reports → /reports/staff, /users removed from top-level
+    - Added Settings collapsible submenu with Users child → /settings/users
+    - Active state: bg-blue-50 text-primary
+    - Removed logo (moved to Header)
+
+  Header.tsx (created):
+    - 64px header with "ACLS" logo + "Manager Portal" subtitle
+    - Bell notification icon, role display from session, LogOut button
+    - Uses lucide-react Bell and LogOut icons
+
+  (dashboard)/layout.tsx (updated):
+    - Added <Header /> above sidebar area
+    - Structure: flex-col (header top) → flex row (sidebar + main)
+    - Background: bg-gray-50 → bg-background (#F1EFE8)
+    - Padding: py-8 → py-6
+
+---
+
+CHANGES — ASSIGN DIALOG (manager_assign_flow.md compliance)
+------------------------------------------------------------
+
+  AssignDialog.tsx (rewritten):
+    1. Auto-load: Recommendations load automatically on mount via useEffect
+       (was: manual "Load Smart Recommendations" button)
+    2. Ordinal rank: Shows "1st", "2nd", "3rd" etc. instead of matchScore.toFixed(2)
+    3. Confirmation dialog: Clicking "Assign" shows a confirm step with staff name
+       before calling API (was: immediate API call)
+    4. Error handling: Uses @acls/error-codes for structured error messages:
+       - Complaint.StaffNotAvailable → specific user message
+       - Complaint.InvalidStatusTransition → specific user message
+
+---
+
+CHANGES — COMPLAINT FILTERS
+----------------------------
+
+  ComplaintFilters.tsx (rewritten):
+    - Added 4 new filter fields: Search (text), Category (text), Date From, Date To
+    - Total: 6 filter controls (search, status, urgency, category, dateFrom, dateTo)
+    - All focus classes use focus:border-primary (not primary-500)
+
+  complaints/page.tsx (updated):
+    - Added 4 new state variables: categoryFilter, searchFilter, dateFromFilter, dateToFilter
+    - Updated fetchComplaints to pass all 7 params to getAllComplaints
+    - Updated useEffect dependencies for all filter states
+    - Added 4 new handler functions (each resets page to 1)
+    - Updated <ComplaintFilters> JSX to pass all 12 props
+
+  lib/api/complaints.ts (updated):
+    - Added category?, search?, dateFrom?, dateTo? to GetComplaintsParams
+
+---
+
+CHANGES — ROUTE RESTRUCTURING
+-------------------------------
+
+  reports/page.tsx → redirect("/reports/staff")
+  reports/staff/page.tsx (created) — staff performance table (migrated content)
+  reports/units/page.tsx (created) — unit history lookup by unit ID
+  reports/summary/page.tsx (created) — complaints summary auto-load
+
+  users/page.tsx → redirect("/settings/users")
+  settings/users/page.tsx (created) — users table with deactivate/reactivate
+    - Links to /settings/users/invite (no inline form)
+    - Uses ErrorCodes: User.CannotDeactivateSelf, User.AlreadyDeactivated, User.AlreadyActive
+  settings/users/invite/page.tsx (created) — invite form (email + unit ID)
+    - Uses ErrorCodes: Auth.EmailAlreadyRegistered, Validation.Failed
+    - Success: "Invitation sent to {email}. Link expires in 72 hours."
+
+---
+
+CHANGES — OUTAGES
+-------------------
+
+  outages/new/page.tsx (updated):
+    - Redirect after declare: /outages → /outages/{outageId}
+    - Added ErrorCodes import and specific error handling:
+        Outage.EndTimeBeforeStartTime → "End time must be after start time."
+        Outage.StartTimeInPast → "Start time cannot be in the past."
+        Validation.Failed → detail from response
+
+  outages/[id]/page.tsx (created):
+    - Fetches getOutageById(outageId), shows detail card
+    - Notification status banner:
+        notificationSentAt === null → amber "Notifications are being sent..."
+        notificationSentAt set → green "Notifications sent at {datetime}"
+
+---
+
+VERIFICATION RESULTS (POST-COMPLIANCE)
+---------------------------------------
+
+TypeScript typecheck (tsc --noEmit):
+  Exit code: 0 — zero errors
+
+npm install:
+  182 packages audited, 46 new packages added
+
+Broken Tailwind class audit (primary-500/600/700 references):
+  0 remaining — all migrated to flat primary token
+
+---
+
+DEFERRED ITEMS (UPDATED)
+-------------------------
+- TanStack Query v5 migration: pages still use raw useEffect + useState patterns;
+  @tanstack/react-query is installed but not yet adopted
+- React Hook Form + Zod migration: forms still use raw useState + FormEvent;
+  react-hook-form and zod are installed but not yet adopted
+- @tanstack/react-table migration: tables still use raw <table> HTML
+- LoadingSpinner.tsx: design_system.md §5.4 recommends shadcn/ui Skeleton;
+  current spinner is functional but not aligned with the design system
+- Next.js 15/16 upgrade (breaking change — security advisory)
+- Route guard middleware (src/middleware.ts) for server-side JWT verification
+- Unit / integration tests for components and lib/api
+
+---
+
+TOTAL FILE COUNT
+----------------
+  packages/shared-types:   6 files
+  packages/api-contracts:  9 files
+  packages/sdk:            4 files
+  ResidentApp.Web config:  9 files
+  ResidentApp.Web src/:   47 files
+  -----------------------------------
+  TOTAL:                  75 files

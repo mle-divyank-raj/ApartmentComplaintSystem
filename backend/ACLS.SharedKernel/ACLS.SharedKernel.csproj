@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.SharedKernel</RootNamespace>
+    <AssemblyName>ACLS.SharedKernel</AssemblyName>
+    <!-- Zero external NuGet dependencies — only .NET BCL permitted in SharedKernel -->
+  </PropertyGroup>
+
+</Project>

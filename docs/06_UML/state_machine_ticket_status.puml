@@ -1,0 +1,42 @@
+@startuml state_machine_ticket_status
+' File: docs/06_UML/state_machine_ticket_status.puml
+' Ticket status state machine for ACLS Complaint entity
+
+skinparam state {
+  BackgroundColor LightBlue
+  BorderColor DarkBlue
+  FontName Arial
+}
+
+title Complaint TicketStatus State Machine
+
+[*] --> OPEN : Resident submits complaint\n(POST /complaints or POST /complaints/sos)
+
+OPEN --> ASSIGNED : Manager assigns staff\n(POST /complaints/{id}/assign)\n[side effect: Staff.Availability = BUSY]
+
+ASSIGNED --> ASSIGNED : Manager reassigns\n(POST /complaints/{id}/reassign)\n[frees old staff, assigns new staff]
+
+ASSIGNED --> EN_ROUTE : Staff acknowledges\n(POST /complaints/{id}/status { EN_ROUTE })
+
+EN_ROUTE --> IN_PROGRESS : Staff begins work\n(POST /complaints/{id}/status { IN_PROGRESS })
+
+IN_PROGRESS --> RESOLVED : Staff marks resolved\n(POST /complaints/{id}/resolve)\n[side effect: Staff.Availability = AVAILABLE]\n[async: notify Resident, calculate TAT]
+
+RESOLVED --> CLOSED : Resident submits feedback\n(POST /complaints/{id}/feedback)\n[async: update Staff.AverageRating]
+
+note right of OPEN
+  SOS complaints skip\n
+  OPEN → jump to ASSIGNED\n
+  (system-assigned, no\n
+  manager action required)
+end note
+
+note right of CLOSED
+  Terminal state.\n
+  No transitions out\n
+  of CLOSED.
+end note
+
+CLOSED --> [*]
+
+@enduml

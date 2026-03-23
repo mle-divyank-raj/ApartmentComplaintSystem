@@ -1,0 +1,296 @@
+Phase 4b Progress Update — Android Applications
+================================================
+Date: Phase 4b completion
+Status: COMPLETE
+
+## Summary
+
+Phase 4b delivered two fully separate Android Gradle projects under `apps/`:
+
+1. `apps/ResidentApp.Android/`  — package: com.acls.resident
+2. `apps/StaffApp.Android/`     — package: com.acls.staff
+
+Both projects are ready to open in Android Studio (File → Open → select the app folder).
+Both use identical tech stacks and patterns, with screens tailored to each role.
+
+---
+
+## Tech Stack (both apps)
+
+| Component             | Version / Choice                          |
+|-----------------------|-------------------------------------------|
+| Language              | Kotlin 2.0.20                             |
+| AGP                   | 8.5.2                                     |
+| Gradle Wrapper        | 8.7                                       |
+| compileSdk / targetSdk| 35                                        |
+| minSdk                | 26                                        |
+| UI                    | Jetpack Compose (BOM 2024.09.00)          |
+| DI                    | Hilt 2.51.1 + @HiltViewModel             |
+| State                 | StateFlow + collectAsStateWithLifecycle() |
+| Network               | Retrofit 2.11.0 + OkHttp 4.12.0 + Gson   |
+| Session               | DataStore Preferences 1.1.1               |
+| Navigation            | Navigation Compose 2.8.0                  |
+| Java target           | VERSION_17                                |
+| Base URL              | BuildConfig.API_BASE_URL (local.properties)|
+
+---
+
+## ResidentApp.Android — Files Created (52 files)
+
+### Gradle / Config
+- gradle/libs.versions.toml
+- settings.gradle.kts
+- build.gradle.kts (root)
+- gradle/wrapper/gradle-wrapper.properties
+- gradle.properties
+- local.properties
+- .gitignore
+- app/build.gradle.kts (applicationId: com.acls.resident)
+
+### Manifest + Resources
+- app/src/main/AndroidManifest.xml
+  · Permissions: INTERNET, READ_MEDIA_IMAGES
+  · usesCleartextTraffic=true (dev)
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values/themes.xml
+
+### Core
+- ResidentApplication.kt   (@HiltAndroidApp)
+- MainActivity.kt          (@AndroidEntryPoint, injects SessionManager)
+
+### Navigation
+- navigation/Screen.kt     (Login, Register, Home, ComplaintHistory, SubmitComplaint,
+                             Sos, Outages, ComplaintDetail(id), Feedback(id))
+- navigation/NavGraph.kt   (full NavHost with all routes)
+
+### Session
+- session/SessionManager.kt  (DataStore: accessToken, userId, role, propertyId)
+
+### Data Layer
+- data/remote/dto/AuthDtos.kt          (RegisterResidentRequestDto, LoginRequestDto,
+                                         AuthTokenResponseDto)
+- data/remote/dto/ComplaintDtos.kt     (ComplaintDto, ComplaintsPageDto, WorkNoteDto,
+                                         MediaDto, StaffMemberSummaryDto,
+                                         TriggerSosRequestDto, SubmitFeedbackRequestDto)
+- data/remote/dto/OutageDtos.kt        (OutageDto)
+- data/remote/ApiService.kt            (register, login, submitComplaint [multipart],
+                                         getMyComplaints, triggerSos, getComplaint,
+                                         submitFeedback, getOutages)
+- data/repository/AuthRepositoryImpl.kt
+- data/repository/ComplaintRepositoryImpl.kt  (multipart via ContentResolver + Uri)
+- data/repository/OutageRepositoryImpl.kt
+
+### Domain Layer
+- domain/model/AuthToken.kt
+- domain/model/Complaint.kt   (Complaint, WorkNote, ComplaintsPage, Media)
+- domain/model/Outage.kt
+- domain/repository/AuthRepository.kt
+- domain/repository/ComplaintRepository.kt
+- domain/repository/OutageRepository.kt
+
+### DI
+- di/AppModule.kt  (NetworkModule: OkHttp with Bearer JWT interceptor, Retrofit;
+                    RepositoryModule: @Binds for all three repositories)
+
+### UI Theme
+- ui/theme/Color.kt   (Blue600, Blue800, Orange700, Red700, Green700, Gray100)
+- ui/theme/Type.kt
+- ui/theme/Theme.kt   (ResidentAppTheme with lightColorScheme)
+
+### Shared UI Components
+- ui/components/LoadingScreen.kt
+- ui/components/ErrorScreen.kt
+- ui/components/ComplaintCard.kt
+
+### Screens
+- ui/screens/login/LoginViewModel.kt + LoginScreen.kt
+- ui/screens/register/RegisterViewModel.kt + RegisterScreen.kt
+- ui/screens/home/HomeScreen.kt             (nav hub, prominent SOS button in error color)
+- ui/screens/complaints/history/ComplaintHistoryViewModel.kt + ComplaintHistoryScreen.kt
+- ui/screens/complaints/detail/ComplaintDetailViewModel.kt + ComplaintDetailScreen.kt
+- ui/screens/complaints/submit/SubmitComplaintViewModel.kt + SubmitComplaintScreen.kt
+  · Media picker (up to 3 images), urgency dropdown, permissionToEnter checkbox
+- ui/screens/complaints/sos/SosViewModel.kt + SosScreen.kt
+- ui/screens/complaints/feedback/FeedbackViewModel.kt + FeedbackScreen.kt
+  · Star rating UI (1–5), filled/outlined stars
+- ui/screens/outages/OutagesViewModel.kt + OutagesScreen.kt
+
+---
+
+## StaffApp.Android — Files Created (51 files)
+
+### Gradle / Config
+- gradle/libs.versions.toml
+- settings.gradle.kts
+- build.gradle.kts (root)
+- gradle/wrapper/gradle-wrapper.properties
+- gradle.properties
+- local.properties
+- .gitignore
+- app/build.gradle.kts (applicationId: com.acls.staff)
+
+### Manifest + Resources
+- app/src/main/AndroidManifest.xml
+  · Permissions: INTERNET, READ_MEDIA_IMAGES
+  · usesCleartextTraffic=true (dev)
+- app/src/main/res/values/strings.xml
+- app/src/main/res/values/themes.xml
+
+### Core
+- StaffApplication.kt   (@HiltAndroidApp)
+- MainActivity.kt       (@AndroidEntryPoint, injects SessionManager)
+
+### Navigation
+- navigation/Screen.kt   (Login, MyTasks, ComplaintDetail(id), UpdateStatus(id),
+                            UpdateEta(id), AddWorkNote(id), ResolveComplaint(id),
+                            UpdateAvailability)
+- navigation/NavGraph.kt  (full NavHost with all routes)
+
+### Session
+- session/SessionManager.kt  (DataStore: accessToken, userId, role + staffMemberId)
+  · saveStaffMemberId() called after getMyProfile() — needed for availability endpoint
+
+### Data Layer
+- data/remote/dto/AuthDtos.kt       (LoginRequestDto, AuthTokenResponseDto)
+- data/remote/dto/ComplaintDtos.kt  (ComplaintDto, ComplaintsPageDto, WorkNoteDto,
+                                      MediaDto, StaffMemberSummaryDto,
+                                      AddWorkNoteRequestDto, UpdateComplaintStatusRequestDto,
+                                      UpdateEtaRequestDto)
+- data/remote/dto/StaffDtos.kt      (StaffMemberDto, StaffMemberWithAssignmentsDto,
+                                      UpdateAvailabilityRequestDto)
+- data/remote/ApiService.kt         (login, getMyProfile, getComplaint,
+                                      updateComplaintStatus, updateEta, addWorkNote,
+                                      resolveComplaint [multipart], updateAvailability)
+- data/repository/AuthRepositoryImpl.kt
+- data/repository/ComplaintRepositoryImpl.kt  (resolve uses multipart via ContentResolver)
+- data/repository/StaffRepositoryImpl.kt      (saves staffMemberId to session on load)
+
+### Domain Layer
+- domain/model/AuthToken.kt
+- domain/model/Complaint.kt   (Complaint, WorkNote, Media, StaffMemberSummary)
+- domain/model/Staff.kt       (Staff with activeAssignments: List<Complaint>)
+- domain/repository/AuthRepository.kt
+- domain/repository/ComplaintRepository.kt
+- domain/repository/StaffRepository.kt
+
+### DI
+- di/AppModule.kt  (NetworkModule + RepositoryModule @Binds for Auth, Complaint, Staff)
+
+### UI Theme
+- ui/theme/Color.kt   (Green700 primary — distinct from ResidentApp blue)
+- ui/theme/Type.kt
+- ui/theme/Theme.kt   (StaffAppTheme with lightColorScheme, green primary)
+
+### Shared UI Components
+- ui/components/LoadingScreen.kt
+- ui/components/ErrorScreen.kt
+- ui/components/ComplaintCard.kt  (shows urgency with color: EMERGENCY=error, HIGH=tertiary)
+
+### Screens
+- ui/screens/login/LoginViewModel.kt + LoginScreen.kt
+- ui/screens/mytasks/MyTasksViewModel.kt + MyTasksScreen.kt
+  · Shows staff profile (name, jobTitle, availability)
+  · Tappable availability badge navigates to UpdateAvailability
+  · LazyColumn of active assignments
+- ui/screens/complaintdetail/ComplaintDetailViewModel.kt + ComplaintDetailScreen.kt
+  · Full detail view: title, status, urgency, category, unit, resident, permissionToEnter
+  · Work notes list, ETA display
+  · Action buttons: Update Status, Update ETA, Add Work Note, Resolve (hidden if RESOLVED)
+- ui/screens/updatestatus/UpdateStatusViewModel.kt + UpdateStatusScreen.kt
+  · Two buttons: EN_ROUTE, IN_PROGRESS
+- ui/screens/updateeta/UpdateEtaViewModel.kt + UpdateEtaScreen.kt
+  · Free-text ISO 8601 input field
+- ui/screens/worknote/AddWorkNoteViewModel.kt + AddWorkNoteScreen.kt
+  · Multi-line text field
+- ui/screens/resolve/ResolveComplaintViewModel.kt + ResolveComplaintScreen.kt
+  · resolutionNotes text field
+  · PickMultipleVisualMedia (max 3 photos), thumbnail preview with remove button
+  · Multipart POST to /complaints/{id}/resolve
+- ui/screens/availability/UpdateAvailabilityViewModel.kt + UpdateAvailabilityScreen.kt
+  · Radio buttons: AVAILABLE, ON_BREAK, OFF_DUTY (BUSY excluded — system-assigned only)
+  · staffMemberId read from SessionManager (set when getMyProfile() was called)
+
+---
+
+## Architecture Rules Applied
+
+- Zero business logic in ViewModels — only repository delegation
+- Sealed UiState (Idle/Loading/Success/Error) per screen
+- StateFlow only (no LiveData, no sharedFlow for UI)
+- collectAsStateWithLifecycle() in all @Composable screens
+- Domain interfaces in domain/repository/, implementations in data/repository/
+- DTOs carry @SerializedName, domain models are clean Kotlin data classes
+- Hilt @HiltViewModel + @Inject constructor everywhere
+- BuildConfig.API_BASE_URL from local.properties (gitignored)
+- Bearer JWT interceptor in OkHttpClient
+
+---
+
+## Compliance Pass — Post-Implementation Fixes
+
+### ResidentApp.Android
+
+#### Error Handling Infrastructure
+- Created `data/remote/ApiException.kt` — RFC 7807 `ProblemDetails` parser, `ApiException` class,
+  `HttpException.toApiException(gson)` extension function
+- Created `ui/ErrorCodeMapper.kt` — Maps 17 error codes to `@StringRes` resource IDs
+  (Auth.*, Validation.*, Complaint.*, System.*) with `getMessage(context, exception)` overloads
+- Updated `res/values/strings.xml` — Added 15 error code string resources
+
+#### All 8 ViewModels Updated
+All ViewModels now inject `Gson` + `@ApplicationContext Context` and use the pattern:
+  `HttpException` → `toApiException(gson)` → `ErrorCodeMapper.getMessage()`,
+  with fallback to `System.InternalError` for non-HTTP exceptions.
+- LoginViewModel, RegisterViewModel, SubmitComplaintViewModel, SosViewModel,
+  FeedbackViewModel, ComplaintHistoryViewModel, ComplaintDetailViewModel, OutagesViewModel
+
+#### Domain Model Fix
+- `domain/model/Complaint.kt` — Added `tat: Double?` field
+- `data/repository/ComplaintRepositoryImpl.kt` — Added `tat = tat` mapping in `toDomain()`
+
+#### Dependency Addition
+- Added Coil 2.7.0 (`coil-compose`) to `gradle/libs.versions.toml` and `app/build.gradle.kts`
+
+#### Screen UI Enhancements
+- **ComplaintDetailScreen** — Added TAT display ("Resolved in Xh Ym"), media thumbnails via
+  `AsyncImage` in a `LazyRow`
+- **SosScreen** — Added `AlertDialog` confirmation before SOS, success confirmation screen
+- **SubmitComplaintScreen** — Replaced free-text category with `ExposedDropdownMenuBox` picker
+  (Plumbing, Electrical, HVAC, Structural, Pest, Other), added confirmation screen on success
+- **FeedbackScreen** — Added "Thank You" screen on success
+
+### StaffApp.Android
+
+#### Error Handling Infrastructure
+- Created `data/remote/ApiException.kt` — Same RFC 7807 parser as ResidentApp
+- Created `ui/ErrorCodeMapper.kt` — Maps 12 error codes relevant to staff workflows
+  (Auth.*, Validation.*, Complaint.InvalidStatusTransition, Staff.CannotSetBusyManually, System.*)
+- Updated `res/values/strings.xml` — Added 10 error code string resources
+
+#### All 8 ViewModels Updated
+Same error handling pattern as ResidentApp:
+- LoginViewModel, MyTasksViewModel, ComplaintDetailViewModel, UpdateStatusViewModel,
+  UpdateEtaViewModel, AddWorkNoteViewModel, ResolveComplaintViewModel, UpdateAvailabilityViewModel
+
+#### Context-Sensitive Status Buttons
+- **UpdateStatusScreen** now receives `currentStatus` via navigation argument:
+  · ASSIGNED → shows only "Accept & En Route" button (sends EN_ROUTE)
+  · EN_ROUTE → shows only "Start Work" button (sends IN_PROGRESS)
+  · Fallback → shows both buttons (backward-compatible)
+- **Screen.kt** — `UpdateStatus` route updated with `?currentStatus={currentStatus}` query param
+- **NavGraph.kt** — Passes `currentStatus` string argument through navigation
+- **ComplaintDetailScreen** — `onUpdateStatusClick` now passes current complaint status
+
+---
+
+## Next Steps (Phase 5 or beyond)
+
+- Add Android Gradle wrapper scripts (gradlew, gradlew.bat) and gradle-wrapper.jar
+  via Android Studio "Open Project" or by running `gradle wrapper --gradle-version 8.7`
+  in each app directory.
+- Replace free-text ETA entry in UpdateEtaScreen with DateTimePicker when
+  the Material3 DateTimePicker API stabilizes.
+- Add READ_MEDIA_IMAGES / READ_MEDIA_VIDEO runtime permission request flow
+  before the photo picker is launched on Android 13+.
+- Add Paging 3 for complaint history infinite scroll (currently page=1 hardcoded).
+- Wire up real notification deep links once FCM integration is added.

@@ -1,0 +1,291 @@
+================================================================================
+PHASE 2 PROGRESS UPDATE — ACLS.Application Layer
+Date: 2026-03-19
+================================================================================
+
+PHASE OBJECTIVE
+---------------
+Build the ACLS.Application layer (MediatR-based CQRS + pipeline behaviours) and
+co-generate NUnit test classes for every handler, following the mandatory testing
+strategy in docs/07_Implementation/testing_strategy.md §4.
+
+PREREQUISITE READING
+--------------------
+All 9 mandatory documents were read in full before any code was written:
+  1. docs/00_Project_Constitution/ai_collaboration_rules.md
+  2. docs/00_Project_Constitution/repository_blueprint.md
+  3. docs/00_Project_Constitution/session_prompt_templates.md
+  4. docs/02_Domain/ubiquitous_language.md
+  5. docs/03_Architecture/system_overview.md
+  6. docs/04_Data/data_model_overview.md
+  7. docs/04_Data/erd.md
+  8. docs/07_Implementation/clean_architecture_guide.md
+  9. docs/07_Implementation/coding_standards.md
+
+WORKSPACE STATE AT PHASE START
+-------------------------------
+  Existing projects:
+    - ACLS.SharedKernel    (Result, Error, Guard, EntityBase, ValueObject, IDomainEvent)
+    - ACLS.Domain          (all aggregates, repositories interfaces, domain services)
+    - ACLS.Persistence     (EF Core DbContext, configurations, repositories)
+    - ACLS.Infrastructure  (DispatchService, email/SMS stubs)
+  Not yet existing (created in this phase):
+    - ACLS.Application
+    - tests/unit/Application.Tests
+
+================================================================================
+FILES CREATED
+================================================================================
+
+── backend/ACLS.Application/ ───────────────────────────────────────────────────
+
+  ACLS.Application.csproj
+    Packages: MediatR 12.*, FluentValidation 11.*,
+              FluentValidation.DependencyInjectionExtensions 11.*,
+              Microsoft.Extensions.Logging.Abstractions 8.*,
+              Microsoft.Extensions.DependencyInjection.Abstractions 8.*
+    ProjectReferences: ACLS.Domain, ACLS.SharedKernel
+
+  Common/Interfaces/ICurrentPropertyContext.cs
+    int PropertyId { get; }
+    int UserId { get; }
+    Provides per-request property + user identity to handlers without coupling
+    them to HttpContext.
+
+  Common/Interfaces/IUnitOfWork.cs
+    BeginTransactionAsync / CommitTransactionAsync / RollbackTransactionAsync
+    Implemented by AclsDbContext (Persistence layer). Consumed only by
+    TransactionBehaviour.
+
+  Common/Behaviours/LoggingBehaviour.cs
+    IPipelineBehaviour<TRequest, TResponse>
+    Logs request name on entry; logs elapsed milliseconds on exit using
+    Stopwatch.GetElapsedTime.
+
+  Common/Behaviours/ValidationBehaviour.cs
+    IPipelineBehaviour<TRequest, TResponse>
+    Resolves all IValidator<TRequest> from DI; runs them concurrently via
+    Task.WhenAll; throws ValidationException if any failures are found.
+    Executes BEFORE the handler, not the handler's unit tests.
+
+  Common/Behaviours/TransactionBehaviour.cs
+    IPipelineBehaviour<TRequest, TResponse>
+    Also defines the ITransactionalCommand marker interface (same file).
+    Wraps only requests that implement ITransactionalCommand in a
+    BeginTransactionAsync / CommitTransactionAsync / RollbackTransactionAsync
+    block. Non-transactional commands pass through unchanged.
+
+── DTOs ─────────────────────────────────────────────────────────────────────────
+
+  Complaints/DTOs/MediaDto.cs           (MediaId, Url, Type, UploadedAt)
+  Complaints/DTOs/WorkNoteDto.cs        (WorkNoteId, Note, CreatedByUserId, CreatedAt)
+  Complaints/DTOs/ComplaintDto.cs       (full projection; includes MediaDtos, WorkNoteDtos)
+  Complaints/DTOs/ComplaintSummaryDto.cs (list projection; no child collections)
+  Dispatch/DTOs/StaffScoreDto.cs        (StaffMemberId, FullName, Score, AvailabilityStatus)
+  Outages/DTOs/OutageDto.cs             (OutageId, PropertyId, Type, Description, StartedAt)
+
+  All DTOs expose a static FromDomain() factory; handlers never expose domain
+  entities across the application boundary.
+
+── Commands ─────────────────────────────────────────────────────────────────────
+
+  Complaints/Commands/SubmitComplaint/
+    SubmitComplaintCommand.cs
+      IRequest<Result<ComplaintDto>>
+      Nested record MediaUploadResult(string Url, string Type) for pre-uploaded
+      blob references (no binary payload in command).
+    SubmitComplaintCommandValidator.cs
+      Rules: Title (3–200), Description (10–2000), Category (not-empty),
+             Urgency (must parse to Urgency enum), UnitId (> 0),
+             each MediaUrl must start with "https://".
+    SubmitComplaintCommandHandler.cs
+      Derives RequiredSkills from Category string.
+      Calls Complaint.Create(...), persists via AddAsync, loops MediaUrls
+      and calls AddMediaAsync for each, publishes ComplaintSubmittedEvent.
+
+  Complaints/Commands/AssignComplaint/
+    AssignComplaintCommand.cs
+      IRequest<Result<ComplaintDto>>, ITransactionalCommand
+    AssignComplaintCommandValidator.cs
+      ComplaintId > 0, StaffMemberId > 0.
+    AssignComplaintCommandHandler.cs
+      Loads Complaint and StaffMember (both scoped to PropertyId).
+      Calls complaint.Assign(staffMemberId) and staff.MarkBusy().
+      Updates both aggregates, publishes ComplaintAssignedEvent.
+
+  Complaints/Commands/ResolveComplaint/
+    ResolveComplaintCommand.cs
+      IRequest<Result<ComplaintDto>>, ITransactionalCommand
+      Nested MediaUploadResult for completion photos.
+    ResolveComplaintCommandValidator.cs
+    ResolveComplaintCommandHandler.cs
+      Calls complaint.Resolve() first — returns failure immediately if not
+      IN_PROGRESS.  Loads assigned staff, calls staff.MarkAvailable(), updates
+      both aggregates, attaches completion photos, publishes
+      ComplaintResolvedEvent.
+
+  Complaints/Commands/TriggerSos/
+    TriggerSosCommand.cs, TriggerSosCommandValidator.cs,
+    TriggerSosCommandHandler.cs
+    Creates complaint, calls complaint.TriggerSos(), persists, publishes
+    SosTriggeredEvent.
+
+  Complaints/Commands/AddWorkNote/AddWorkNoteCommand.cs    (combined)
+    Loads complaint, calls complaint.AddWorkNote(staffUserId, note), persists.
+
+  Complaints/Commands/UpdateEta/UpdateEtaCommand.cs        (combined)
+    Returns Result (no value). Calls complaint.UpdateEta(eta).
+
+  Complaints/Commands/SubmitFeedback/SubmitFeedbackCommand.cs  (combined)
+    Calls complaint.Close(rating, comment). Rating validated 1–5.
+
+  Outages/Commands/DeclareOutage/
+    DeclareOutageCommand.cs, DeclareOutageCommandValidator.cs,
+    DeclareOutageCommandHandler.cs
+    Calls Outage.Declare(...), persists, publishes OutageDeclaredEvent.
+    No direct INotificationService call — notifications are dispatched by an
+    event handler downstream (clean domain boundary).
+
+── Queries ──────────────────────────────────────────────────────────────────────
+
+  Complaints/Queries/GetComplaintById/GetComplaintByIdQuery.cs        (combined)
+    Returns Result<ComplaintDto>. 404 failure if not found on property.
+
+  Complaints/Queries/GetAllComplaints/GetAllComplaintsQuery.cs        (combined)
+    Accepts optional Status, Urgency, AssignedStaffId filters via
+    ComplaintQueryOptions.
+
+  Complaints/Queries/GetComplaintsByResident/
+    GetComplaintsByResidentQuery.cs  (combined)
+    Scoped to current PropertyId + ResidentUserId.
+
+  Dispatch/Queries/GetDispatchRecommendations/
+    GetDispatchRecommendationsQuery.cs  (combined)
+    Delegates to IDispatchService (Domain interface, Phase 1 signature).
+    Returns Result<IReadOnlyList<StaffScoreDto>>.
+
+── Registration ─────────────────────────────────────────────────────────────────
+
+  ApplicationServiceCollectionExtensions.cs
+    Adds MediatR (assembly scan) with pipeline order:
+      LoggingBehaviour → ValidationBehaviour → TransactionBehaviour → Handler
+    AddValidatorsFromAssembly — discovers all FluentValidation validators.
+
+── ACLS.Infrastructure update ───────────────────────────────────────────────────
+
+  ACLS.Infrastructure.csproj
+    Added ProjectReference to ACLS.Application.
+
+  ACLS.Infrastructure/InfrastructureServiceCollectionExtensions.cs  (NEW)
+    Registers IDispatchService → DispatchService (Scoped).
+    Single extension method AddInfrastructure(IServiceCollection).
+
+================================================================================
+TEST PROJECT
+================================================================================
+
+  tests/unit/Application.Tests/Application.Tests.csproj
+    References: ACLS.Application, ACLS.Domain, ACLS.SharedKernel
+    Packages: NUnit 4.*, NUnit3TestAdapter 4.*, Microsoft.NET.Test.Sdk 17.*,
+              NSubstitute 5.*, FluentAssertions 6.*
+
+  tests/unit/Application.Tests/TestDataFactory.cs
+    Constants: PropertyId=1, ResidentId=10, StaffMemberId=20, UnitId=5,
+               ManagerUserId=30
+    Helpers:
+      CreateComplaint(status, urgency, assignedStaffId, complaintId)
+        — uses reflection to set read-only EF-backed properties
+      CreateStaff(availability, staffMemberId)
+      CreateOutage(outageId)
+      SetPrivateProperty<TEntity>(entity, propertyName, value)
+        — generic reflection helper; used by mocks to simulate EF identity
+          key population (complaintId = 1 after AddAsync)
+
+  Test classes and coverage (§4 of testing_strategy.md):
+
+  Complaints/SubmitComplaintCommandHandlerTests.cs — 5 tests
+    4.5.1  Handle_WithValidInputs_CreatesComplaintWithOpenStatus
+    4.5.2  Handle_WithValidInputs_SetsPropertyIdFromContext
+    4.5.3  Handle_WithValidInputs_RaisesComplaintSubmittedEvent
+    4.5.4  Handle_WithMediaUrls_CreatesMediaEntitiesWithUrlsOnly
+    4.5.5  Handle_WithMediaUrls_DoesNotCallStorageService
+
+  Complaints/AssignComplaintCommandHandlerTests.cs — 7 tests
+    4.3.1  Handle_WhenComplaintExists_SetsComplaintStatusToAssigned
+    4.3.2  Handle_WhenComplaintExists_SetsStaffAvailabilityToBusy
+    4.3.3  Handle_WhenComplaintExists_PublishesComplaintAssignedEvent
+    4.3.4  Handle_WhenComplaintExists_ReturnsSuccessWithDto
+    4.3.5  Handle_WhenComplaintNotFound_ReturnsNotFoundFailure
+    4.3.6  Handle_WhenStaffNotFound_ReturnsNotFoundFailure
+    4.3.7  Handle_WhenAssignFails_ReturnsFailureWithoutUpdatingStaff
+
+  Complaints/ResolveComplaintCommandHandlerTests.cs — 7 tests
+    4.4.1  Handle_WhenComplaintIsInProgress_ReturnsSuccess
+    4.4.2  Handle_WhenComplaintIsInProgress_SetsStatusToResolved
+    4.4.3  Handle_WhenComplaintIsInProgress_SetsResolvedAt
+    4.4.4  Handle_WhenComplaintIsInProgress_SetsStaffAvailabilityToAvailable
+    4.4.5  Handle_WhenComplaintIsInProgress_PublishesComplaintResolvedEvent
+    4.4.6  Handle_WhenComplaintIsOpen_ReturnsInvalidTransitionFailure
+    4.4.7  Handle_WhenComplaintIsAlreadyResolved_ReturnsInvalidTransitionFailure
+
+  Outages/DeclareOutageCommandHandlerTests.cs — 3 tests
+    4.6.1  Handle_WithValidInputs_CreatesOutageRecord
+    4.6.2  Handle_WithValidInputs_PublishesOutageDeclaredEvent
+    4.6.3  Handle_WithValidInputs_DoesNotCallNotificationServiceDirectly
+
+================================================================================
+BUILD & TEST RESULTS
+================================================================================
+
+  dotnet build (entire solution)
+  ─────────────────────────────
+  Build succeeded.
+    0 Error(s)
+    0 Warning(s)
+  All 7 projects compiled successfully.
+
+  Issue encountered & resolved during build:
+    AddValidatorsFromAssembly not found → missing NuGet package.
+    Fix: added FluentValidation.DependencyInjectionExtensions 11.* to
+         ACLS.Application.csproj.
+
+  dotnet test (entire solution)
+  ─────────────────────────────
+  Domain.Tests      — 27 / 27 passed ✓
+  Application.Tests — 22 / 22 passed ✓
+
+  Issue encountered & resolved in Application.Tests:
+    2 tests (Handle_WithMediaUrls_*) threw ArgumentOutOfRangeException because
+    the mocked IComplaintRepository.AddAsync did not set ComplaintId on the
+    entity (unlike EF Core which populates identity keys on SaveChanges).
+    Media.Create(complaintId: 0) hit Guard.Against.NegativeOrZero.
+    Fix: configured the AddAsync mock in SubmitComplaintCommandHandlerTests
+         [SetUp] to call SetPrivateProperty(complaint, "ComplaintId", 1),
+         simulating EF Core identity population.
+
+================================================================================
+SOLUTION FILE CHANGES
+================================================================================
+
+  Registered via  dotnet sln add:
+    backend/ACLS.Application/ACLS.Application.csproj
+    tests/unit/Application.Tests/Application.Tests.csproj
+
+================================================================================
+DEFERRED DECISIONS (noted, not changed)
+================================================================================
+
+  IDispatchService signature discrepancy:
+    Phase 1 implementation:  Task<List<StaffScore>> FindOptimalStaffAsync(Complaint, CancellationToken)
+    dispatch_algorithm.md:   Task<IReadOnlyList<StaffScore>> FindOptimalStaffAsync(Complaint, int propertyId, CancellationToken)
+  GetDispatchRecommendationsQuery uses the Phase 1 signature to avoid breaking
+  the existing 12 DispatchServiceTests. Alignment is deferred to Phase 3 when
+  the API/Infrastructure layer is wired end-to-end.
+
+================================================================================
+PHASE 2 STATUS: COMPLETE ✅
+================================================================================
+  All application layer handlers, validators, DTOs, pipeline behaviours created.
+  All 22 mandatory application tests pass. Build is clean.
+  Repository is ready for Phase 3 (API layer / ACLS.Api).
+================================================================================

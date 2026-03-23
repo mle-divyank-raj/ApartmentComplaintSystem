@@ -1,0 +1,31 @@
+/* Localizable.strings — ResidentApp.iOS (English) */
+
+/* Generic */
+"error_generic" = "Something went wrong. Please try again.";
+"error_network" = "Check your internet connection and try again.";
+
+/* Auth */
+"error_auth_invalid_credentials" = "Incorrect email or password.";
+"error_auth_account_deactivated" = "Your account has been deactivated. Contact your property manager.";
+"error_auth_token_expired" = "Your session has expired. Please log in again.";
+"error_auth_invitation_invalid" = "This invitation link is invalid.";
+"error_auth_invitation_expired" = "This invitation has expired. Contact your property manager.";
+"error_auth_invitation_used" = "This invitation link has already been used.";
+"error_auth_invitation_revoked" = "This invitation has been revoked. Contact your property manager.";
+"error_auth_email_already_registered" = "An account with this email already exists.";
+
+/* Validation */
+"error_validation_failed" = "Please check the form and correct any errors.";
+
+/* Complaints */
+"error_complaint_not_found" = "Complaint not found.";
+"error_complaint_max_media" = "Maximum 3 photos allowed.";
+"error_complaint_invalid_media_type" = "Only JPEG and PNG photos are accepted.";
+"error_complaint_media_too_large" = "Each photo must be under 5MB.";
+"error_complaint_invalid_status_transition" = "This action is no longer available for the current complaint status.";
+"error_complaint_feedback_already_submitted" = "You've already left feedback for this complaint.";
+"error_complaint_feedback_not_allowed" = "Feedback can only be submitted after the complaint is resolved.";
+"error_complaint_already_resolved" = "This complaint is already resolved.";
+
+/* System */
+"error_system_storage_unavailable" = "Media upload is temporarily unavailable. Please try again shortly.";

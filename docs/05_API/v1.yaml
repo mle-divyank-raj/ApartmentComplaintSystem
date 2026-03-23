@@ -1,0 +1,1582 @@
+openapi: 3.0.3
+
+info:
+  title: ACLS REST API
+  description: Apartment Complaint Logging System — REST API v1
+  version: 1.0.0
+  contact:
+    name: ACLS Engineering
+    email: engineering@acls.app
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development
+  - url: https://acls-api-staging.azurewebsites.net/api/v1
+    description: Staging
+  - url: https://acls-api.azurewebsites.net/api/v1
+    description: Production
+
+# ─────────────────────────────────────────────────────────────
+# Security
+# ─────────────────────────────────────────────────────────────
+securitySchemes:
+  bearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
+
+security:
+  - bearerAuth: []
+
+# ─────────────────────────────────────────────────────────────
+# Tags
+# ─────────────────────────────────────────────────────────────
+tags:
+  - name: Auth
+  - name: Complaints
+  - name: Staff
+  - name: Dispatch
+  - name: Outages
+  - name: Reports
+  - name: Users
+
+# ─────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new Resident account
+      description: >
+        Creates a new Resident user account using a valid, unexpired invitation token.
+        The token links the new account to a specific Unit.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterResidentRequest'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already registered or token already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate and receive a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  # ── Complaints ───────────────────────────────────────────────
+
+  /complaints:
+    post:
+      tags: [Complaints]
+      summary: Submit a new complaint
+      description: >
+        Submits a new maintenance complaint. Accepts multipart/form-data to allow
+        simultaneous submission of complaint fields and up to 3 media files.
+        Media files are uploaded to blob storage; only URLs are stored in the database.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubmitComplaintRequest'
+      responses:
+        '201':
+          description: Complaint created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of the newly created complaint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Complaints]
+      summary: Get all complaints for the property
+      description: Manager only. Returns paginated, filterable list of all complaints.
+      parameters:
+        - $ref: '#/components/parameters/StatusFilter'
+        - $ref: '#/components/parameters/UrgencyFilter'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/StaffMemberIdFilter'
+        - $ref: '#/components/parameters/UnitIdFilter'
+        - $ref: '#/components/parameters/DateFromFilter'
+        - $ref: '#/components/parameters/DateToFilter'
+        - $ref: '#/components/parameters/SearchFilter'
+        - $ref: '#/components/parameters/SortBy'
+        - $ref: '#/components/parameters/SortDirection'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated complaint list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /complaints/my:
+    get:
+      tags: [Complaints]
+      summary: Get authenticated resident's own complaints
+      description: Resident only. Returns all complaints submitted by the authenticated resident.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Resident's complaint list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /complaints/sos:
+    post:
+      tags: [Complaints]
+      summary: Trigger an SOS emergency complaint
+      description: >
+        Creates a complaint with urgency SOS_EMERGENCY. Bypasses standard triage queue.
+        All on-call staff are notified simultaneously. Complaint is immediately ASSIGNED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerSosRequest'
+      responses:
+        '201':
+          description: SOS complaint created and staff notified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /complaints/{complaintId}:
+    get:
+      tags: [Complaints]
+      summary: Get a single complaint by ID
+      description: >
+        Accessible by: the Resident who submitted it, any Manager of the property,
+        the Staff member assigned to it.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      responses:
+        '200':
+          description: Complaint details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /complaints/{complaintId}/assign:
+    post:
+      tags: [Complaints]
+      summary: Assign complaint to a staff member
+      description: >
+        Manager only. Atomically sets complaint status to ASSIGNED and
+        staff member availability to BUSY in a single transaction.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignComplaintRequest'
+      responses:
+        '200':
+          description: Complaint assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Invalid status transition or staff not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /complaints/{complaintId}/reassign:
+    post:
+      tags: [Complaints]
+      summary: Reassign complaint to a different staff member
+      description: >
+        Manager only. Frees the currently assigned staff member (AVAILABLE)
+        and assigns to a new staff member (BUSY) atomically.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignComplaintRequest'
+      responses:
+        '200':
+          description: Complaint reassigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /complaints/{complaintId}/status:
+    post:
+      tags: [Complaints]
+      summary: Update complaint status
+      description: >
+        MaintenanceStaff only. Valid transitions from this endpoint:
+        ASSIGNED → EN_ROUTE, EN_ROUTE → IN_PROGRESS.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateComplaintStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /complaints/{complaintId}/resolve:
+    post:
+      tags: [Complaints]
+      summary: Mark complaint as resolved
+      description: >
+        MaintenanceStaff only. Accepts multipart/form-data for completion photos.
+        Atomically sets complaint to RESOLVED and staff to AVAILABLE.
+        Triggers resident notification asynchronously.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResolveComplaintRequest'
+      responses:
+        '200':
+          description: Complaint resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /complaints/{complaintId}/feedback:
+    post:
+      tags: [Complaints]
+      summary: Submit resident feedback and rating
+      description: >
+        Resident only. Submits a 1-5 star rating and optional comment.
+        Moves complaint status from RESOLVED to CLOSED.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitFeedbackRequest'
+      responses:
+        '200':
+          description: Feedback submitted, complaint closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /complaints/{complaintId}/work-notes:
+    post:
+      tags: [Complaints]
+      summary: Add a work note to a complaint
+      description: MaintenanceStaff only.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWorkNoteRequest'
+      responses:
+        '201':
+          description: Work note added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkNoteDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /complaints/{complaintId}/eta:
+    post:
+      tags: [Complaints]
+      summary: Update estimated completion time
+      description: >
+        MaintenanceStaff only. Updates the ETA for the complaint.
+        Triggers a notification to the resident with the updated ETA.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEtaRequest'
+      responses:
+        '200':
+          description: ETA updated, resident notified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Staff ────────────────────────────────────────────────────
+
+  /staff:
+    get:
+      tags: [Staff]
+      summary: Get all staff members for the property
+      description: Manager only.
+      responses:
+        '200':
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffMemberDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /staff/me:
+    get:
+      tags: [Staff]
+      summary: Get authenticated staff member profile and active assignments
+      description: MaintenanceStaff only.
+      responses:
+        '200':
+          description: Staff profile with active assignments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMemberWithAssignmentsDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /staff/available:
+    get:
+      tags: [Staff]
+      summary: Get all available staff members
+      description: Manager only. Returns staff with availability = AVAILABLE.
+      responses:
+        '200':
+          description: Available staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffMemberDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /staff/{staffMemberId}:
+    get:
+      tags: [Staff]
+      summary: Get a single staff member
+      description: Manager only.
+      parameters:
+        - $ref: '#/components/parameters/StaffMemberId'
+      responses:
+        '200':
+          description: Staff member details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMemberDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /staff/{staffMemberId}/availability:
+    post:
+      tags: [Staff]
+      summary: Update staff member availability status
+      description: >
+        MaintenanceStaff only. Staff member can only update their own availability.
+        Valid values: AVAILABLE, ON_BREAK, OFF_DUTY.
+        BUSY cannot be set directly — it is set by the system when a complaint is assigned.
+      parameters:
+        - $ref: '#/components/parameters/StaffMemberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvailabilityRequest'
+      responses:
+        '200':
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMemberDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Cannot manually set availability to BUSY
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  # ── Dispatch ─────────────────────────────────────────────────
+
+  /dispatch/recommendations/{complaintId}:
+    get:
+      tags: [Dispatch]
+      summary: Get ranked staff recommendations for a complaint
+      description: >
+        Manager only. Returns a ranked list of available staff scored by the
+        Smart Dispatch algorithm (skill match 60%, idle time 40%, SOS urgency multiplier 2x).
+        List is pre-sorted by matchScore descending. Client renders in order received.
+      parameters:
+        - $ref: '#/components/parameters/ComplaintId'
+      responses:
+        '200':
+          description: Ranked staff recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchRecommendationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Outages ──────────────────────────────────────────────────
+
+  /outages:
+    post:
+      tags: [Outages]
+      summary: Declare a property-wide outage
+      description: >
+        Manager only. Creates an outage record and triggers asynchronous
+        mass SMS and email notification to all residents of the property.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclareOutageRequest'
+      responses:
+        '201':
+          description: Outage declared, notifications queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutageDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Outages]
+      summary: Get all outages for the property
+      description: Accessible by Manager, Resident, and MaintenanceStaff.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Outage list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OutageDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /outages/{outageId}:
+    get:
+      tags: [Outages]
+      summary: Get a single outage
+      parameters:
+        - name: outageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Outage details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutageDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Reports ──────────────────────────────────────────────────
+
+  /reports/dashboard:
+    get:
+      tags: [Reports]
+      summary: Get real-time dashboard metrics
+      description: Manager only.
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardMetricsDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/staff-performance:
+    get:
+      tags: [Reports]
+      summary: Get staff performance summary
+      description: Manager only. Returns TAT and average rating per staff member.
+      responses:
+        '200':
+          description: Staff performance summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffPerformanceSummaryDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/unit-history/{unitId}:
+    get:
+      tags: [Reports]
+      summary: Get complaint history for a specific unit
+      description: Manager only.
+      parameters:
+        - $ref: '#/components/parameters/UnitIdPath'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Unit complaint history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reports/complaints-summary:
+    get:
+      tags: [Reports]
+      summary: Get filterable complaint summary report
+      description: Manager only.
+      parameters:
+        - $ref: '#/components/parameters/StatusFilter'
+        - $ref: '#/components/parameters/UrgencyFilter'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/DateFromFilter'
+        - $ref: '#/components/parameters/DateToFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Complaint summary report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplaintsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Users ────────────────────────────────────────────────────
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Get all users for the property
+      description: Manager only.
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/invite:
+    post:
+      tags: [Users]
+      summary: Invite a new resident
+      description: >
+        Manager only. Generates a secure invitation token and sends it
+        to the provided email address. Token expires in 72 hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteResidentRequest'
+      responses:
+        '201':
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{userId}/deactivate:
+    post:
+      tags: [Users]
+      summary: Deactivate a user account
+      description: Manager only. Sets IsActive = false. User cannot log in.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{userId}/reactivate:
+    post:
+      tags: [Users]
+      summary: Reactivate a deactivated user account
+      description: Manager only. Sets IsActive = true.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User reactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ─────────────────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────────────────
+components:
+
+  # ── Parameters ──────────────────────────────────────────────
+  parameters:
+    ComplaintId:
+      name: complaintId
+      in: path
+      required: true
+      schema:
+        type: integer
+    StaffMemberId:
+      name: staffMemberId
+      in: path
+      required: true
+      schema:
+        type: integer
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+    UnitIdPath:
+      name: unitId
+      in: path
+      required: true
+      schema:
+        type: integer
+    StatusFilter:
+      name: status
+      in: query
+      schema:
+        $ref: '#/components/schemas/TicketStatus'
+    UrgencyFilter:
+      name: urgency
+      in: query
+      schema:
+        $ref: '#/components/schemas/Urgency'
+    CategoryFilter:
+      name: category
+      in: query
+      schema:
+        type: string
+    StaffMemberIdFilter:
+      name: staffMemberId
+      in: query
+      schema:
+        type: integer
+    UnitIdFilter:
+      name: unitId
+      in: query
+      schema:
+        type: integer
+    DateFromFilter:
+      name: dateFrom
+      in: query
+      schema:
+        type: string
+        format: date-time
+    DateToFilter:
+      name: dateTo
+      in: query
+      schema:
+        type: string
+        format: date-time
+    SearchFilter:
+      name: search
+      in: query
+      schema:
+        type: string
+    SortBy:
+      name: sortBy
+      in: query
+      schema:
+        type: string
+        enum: [createdAt, urgency, status, updatedAt]
+        default: createdAt
+    SortDirection:
+      name: sortDirection
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  # ── Responses ────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Forbidden:
+      description: Insufficient role for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Resource not found within property scope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationError:
+      description: One or more validation errors
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblemDetails'
+    UnprocessableEntity:
+      description: Invalid state transition or business rule violation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  # ── Schemas ──────────────────────────────────────────────────
+  schemas:
+
+    # Enums
+    TicketStatus:
+      type: string
+      enum: [OPEN, ASSIGNED, EN_ROUTE, IN_PROGRESS, RESOLVED, CLOSED]
+
+    Urgency:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, SOS_EMERGENCY]
+
+    StaffState:
+      type: string
+      enum: [AVAILABLE, BUSY, ON_BREAK, OFF_DUTY]
+
+    OutageType:
+      type: string
+      enum: [Electricity, Water, Gas, Internet, Elevator, Other]
+
+    # Problem Details
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errorCode:
+          type: string
+      required: [type, title, status, detail, errorCode]
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+
+    # Auth
+    RegisterResidentRequest:
+      type: object
+      properties:
+        invitationToken:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        firstName:
+          type: string
+          maxLength: 100
+        lastName:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+      required: [invitationToken, email, password, firstName, lastName]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    AuthTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        userId:
+          type: integer
+        role:
+          type: string
+        propertyId:
+          type: integer
+      required: [accessToken, expiresAt, userId, role, propertyId]
+
+    # Complaints
+    SubmitComplaintRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        category:
+          type: string
+          maxLength: 100
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        permissionToEnter:
+          type: boolean
+        mediaFiles:
+          type: array
+          items:
+            type: string
+            format: binary
+          maxItems: 3
+      required: [title, description, category, urgency, permissionToEnter]
+
+    TriggerSosRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        permissionToEnter:
+          type: boolean
+      required: [title, description, permissionToEnter]
+
+    AssignComplaintRequest:
+      type: object
+      properties:
+        staffMemberId:
+          type: integer
+      required: [staffMemberId]
+
+    UpdateComplaintStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [EN_ROUTE, IN_PROGRESS]
+      required: [status]
+
+    ResolveComplaintRequest:
+      type: object
+      properties:
+        resolutionNotes:
+          type: string
+          maxLength: 2000
+        completionPhotos:
+          type: array
+          items:
+            type: string
+            format: binary
+          maxItems: 3
+      required: [resolutionNotes]
+
+    SubmitFeedbackRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+      required: [rating]
+
+    AddWorkNoteRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 2000
+      required: [content]
+
+    UpdateEtaRequest:
+      type: object
+      properties:
+        eta:
+          type: string
+          format: date-time
+      required: [eta]
+
+    MediaDto:
+      type: object
+      properties:
+        mediaId:
+          type: integer
+        url:
+          type: string
+        type:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+      required: [mediaId, url, type, uploadedAt]
+
+    WorkNoteDto:
+      type: object
+      properties:
+        workNoteId:
+          type: integer
+        content:
+          type: string
+        staffMemberId:
+          type: integer
+        staffMemberName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [workNoteId, content, staffMemberId, staffMemberName, createdAt]
+
+    StaffMemberSummaryDto:
+      type: object
+      properties:
+        staffMemberId:
+          type: integer
+        fullName:
+          type: string
+        jobTitle:
+          type: string
+        availability:
+          $ref: '#/components/schemas/StaffState'
+      required: [staffMemberId, fullName, availability]
+
+    ComplaintDto:
+      type: object
+      properties:
+        complaintId:
+          type: integer
+        propertyId:
+          type: integer
+        unitId:
+          type: integer
+        unitNumber:
+          type: string
+        buildingName:
+          type: string
+        residentId:
+          type: integer
+        residentName:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        permissionToEnter:
+          type: boolean
+        assignedStaffMember:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/StaffMemberSummaryDto'
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaDto'
+        workNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkNoteDto'
+        eta:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        tat:
+          type: number
+          format: double
+          nullable: true
+          description: Turn-around time in minutes
+        residentRating:
+          type: integer
+          nullable: true
+        residentFeedbackComment:
+          type: string
+          nullable: true
+      required: [complaintId, propertyId, unitId, residentId, title, description,
+                 category, urgency, status, permissionToEnter, media, workNotes,
+                 createdAt, updatedAt]
+
+    ComplaintsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComplaintDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+      required: [items, totalCount, page, pageSize]
+
+    # Staff
+    StaffMemberDto:
+      type: object
+      properties:
+        staffMemberId:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: string
+        jobTitle:
+          type: string
+          nullable: true
+        skills:
+          type: array
+          items:
+            type: string
+        availability:
+          $ref: '#/components/schemas/StaffState'
+        averageRating:
+          type: number
+          format: double
+          nullable: true
+        lastAssignedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [staffMemberId, userId, fullName, skills, availability]
+
+    StaffMemberWithAssignmentsDto:
+      allOf:
+        - $ref: '#/components/schemas/StaffMemberDto'
+        - type: object
+          properties:
+            activeAssignments:
+              type: array
+              items:
+                $ref: '#/components/schemas/ComplaintDto'
+          required: [activeAssignments]
+
+    UpdateAvailabilityRequest:
+      type: object
+      properties:
+        availability:
+          type: string
+          enum: [AVAILABLE, ON_BREAK, OFF_DUTY]
+      required: [availability]
+
+    # Dispatch
+    StaffScoreDto:
+      type: object
+      properties:
+        staffMemberId:
+          type: integer
+        fullName:
+          type: string
+        jobTitle:
+          type: string
+          nullable: true
+        skills:
+          type: array
+          items:
+            type: string
+        availability:
+          $ref: '#/components/schemas/StaffState'
+        matchScore:
+          type: number
+          format: double
+        skillScore:
+          type: number
+          format: double
+        idleScore:
+          type: number
+          format: double
+        averageRating:
+          type: number
+          format: double
+          nullable: true
+        lastAssignedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [staffMemberId, fullName, skills, availability,
+                 matchScore, skillScore, idleScore]
+
+    DispatchRecommendationsResponse:
+      type: object
+      properties:
+        complaintId:
+          type: integer
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffScoreDto'
+      required: [complaintId, recommendations]
+
+    # Outages
+    DeclareOutageRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        outageType:
+          $ref: '#/components/schemas/OutageType'
+        description:
+          type: string
+          maxLength: 2000
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+      required: [title, outageType, description, startTime, endTime]
+
+    OutageDto:
+      type: object
+      properties:
+        outageId:
+          type: integer
+        propertyId:
+          type: integer
+        title:
+          type: string
+        outageType:
+          $ref: '#/components/schemas/OutageType'
+        description:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        declaredAt:
+          type: string
+          format: date-time
+        notificationSentAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [outageId, propertyId, title, outageType, description,
+                 startTime, endTime, declaredAt]
+
+    # Reports
+    ActiveAssignmentDto:
+      type: object
+      properties:
+        complaintId:
+          type: integer
+        title:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        unitNumber:
+          type: string
+        buildingName:
+          type: string
+        assignedStaffMember:
+          $ref: '#/components/schemas/StaffMemberSummaryDto'
+        eta:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [complaintId, title, urgency, status, unitNumber, buildingName,
+                 assignedStaffMember, createdAt]
+
+    DashboardMetricsDto:
+      type: object
+      properties:
+        openCount:
+          type: integer
+        assignedCount:
+          type: integer
+        inProgressCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        closedCount:
+          type: integer
+        sosActiveCount:
+          type: integer
+        activeAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveAssignmentDto'
+        staffAvailabilitySummary:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffMemberSummaryDto'
+      required: [openCount, assignedCount, inProgressCount, resolvedCount,
+                 closedCount, sosActiveCount, activeAssignments,
+                 staffAvailabilitySummary]
+
+    StaffPerformanceSummaryDto:
+      type: object
+      properties:
+        staffMemberId:
+          type: integer
+        fullName:
+          type: string
+        jobTitle:
+          type: string
+          nullable: true
+        totalResolved:
+          type: integer
+        averageRating:
+          type: number
+          format: double
+          nullable: true
+        averageTatMinutes:
+          type: number
+          format: double
+          nullable: true
+      required: [staffMemberId, fullName, totalResolved]
+
+    # Users
+    UserDto:
+      type: object
+      properties:
+        userId:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [userId, email, firstName, lastName, role, isActive, createdAt]
+
+    InviteResidentRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        unitId:
+          type: integer
+      required: [email, unitId]
+
+    InvitationDto:
+      type: object
+      properties:
+        invitationTokenId:
+          type: integer
+        email:
+          type: string
+        unitId:
+          type: integer
+        unitNumber:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        issuedAt:
+          type: string
+          format: date-time
+      required: [invitationTokenId, email, unitId, unitNumber, expiresAt, issuedAt]

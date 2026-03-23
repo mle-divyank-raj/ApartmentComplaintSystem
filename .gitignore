@@ -1,0 +1,37 @@
+# --- .NET / dotnet ---
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# --- React / Next.js / Node ---
+node_modules/
+.next/
+build/
+dist/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Android ---
+.gradle/
+app/build/
+*.iml
+.idea/
+
+# --- Apple (Xcode/Swift) ---
+*.DS_Store
+xcuserdata/
+Pods/
+.build/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcworkspace/contents.xcworkspacedata
+
+# --- Miscellaneous ---
+.DS_Store

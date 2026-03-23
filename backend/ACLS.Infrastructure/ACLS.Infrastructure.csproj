@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.Infrastructure</RootNamespace>
+    <AssemblyName>ACLS.Infrastructure</AssemblyName>
+    <!--
+      DEPENDENCY RULE (Clean Architecture):
+      ACLS.Infrastructure may reference ACLS.Domain and ACLS.SharedKernel.
+      It implements interfaces defined in Domain using external technologies.
+      Must NOT reference ACLS.Api or ACLS.Persistence.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.*" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACLS.Application\ACLS.Application.csproj" />
+    <ProjectReference Include="..\ACLS.Domain\ACLS.Domain.csproj" />
+    <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

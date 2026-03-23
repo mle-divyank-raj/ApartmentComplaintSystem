@@ -1,0 +1,175 @@
+PHASE 4c PROGRESS UPDATE
+========================
+Date: Phase 4c completion
+Focus: iOS Native Applications — ResidentApp.iOS and StaffApp.iOS
+
+OVERVIEW
+--------
+Phase 4c delivered complete iOS native implementations for both the resident-facing and
+staff-facing apps, following the same architecture patterns established in Phase 4a (Android
+ResidentApp) and Phase 4b (Android StaffApp).
+
+Both apps use:
+  - Swift 5.0 + SwiftUI, iOS 16.0+ deployment target
+  - async/await exclusively (no Combine, no completion handlers)
+  - @MainActor final class ViewModels with @Published private(set) state
+  - JSONDecoder with .convertFromSnakeCase + .iso8601 date strategy
+  - JWT stored in iOS Keychain via TokenStore
+  - Base URL read from Info.plist key API_BASE_URL (never hardcoded)
+  - NavigationPath-based routing via NavigationRouter + AppRoute/StaffAppRoute enums
+  - All error codes mapped to NSLocalizedString keys via ErrorCodeMapper
+
+================================================================================
+RESIDENTAPP.iOS
+================================================================================
+Bundle ID: com.acls.resident
+Location: apps/ResidentApp.iOS/
+
+PROJECT INFRASTRUCTURE (Task 4c.1)
+------------------------------------
+Files created:
+  ResidentApp.iOS.xcodeproj/project.pbxproj   — Xcode project (32 files, iOS 16+)
+  Sources/Info.plist                           — API_BASE_URL, photo/camera usage strings
+  Sources/ACLSApp.swift                        — @main entry point
+  Sources/ContentView.swift                    — Root view (login vs home routing)
+  Sources/APIClient.swift                      — Async/await HTTP client, multipart support
+  Sources/Enums.swift                          — TicketStatus, Urgency, StaffState, OutageType
+  Sources/AuthDTOs.swift                       — LoginRequest, RegisterResidentRequest, AuthTokenResponse
+  Sources/ComplaintDTOs.swift                  — ComplaintDTO, WorkNoteDTO, MediaDTO, etc.
+  Sources/OutageDTOs.swift                     — OutageDTO
+  Sources/TokenStore.swift                     — Keychain-backed JWT session (@MainActor)
+  Sources/ErrorCodeMapper.swift                — Maps all error codes to Localizable.strings keys
+  Sources/Localizable.strings                  — 19 user-facing error string localizations
+  Sources/Assets.xcassets/Contents.json        — Asset catalog
+  Sources/AuthRepository.swift                 — login(), register()
+  Sources/ComplaintRepository.swift            — CRUD + SOS + feedback
+  Sources/OutageRepository.swift               — getOutages(), getOutage()
+  Sources/NavigationRouter.swift               — AppRoute enum + NavigationPath routing
+
+AUTH SCREENS (Task 4c.2)
+--------------------------
+  Sources/LoginViewModel.swift    — TokenStore parameter injection pattern
+  Sources/LoginView.swift         — Email/password form, @EnvironmentObject tokenStore
+  Sources/RegisterViewModel.swift — All fields, invitation token
+  Sources/RegisterView.swift      — 5 fields (firstName, lastName, email, password, phone)
+
+COMPLAINT SCREENS (Task 4c.3)
+-------------------------------
+  Sources/SubmitComplaintViewModel.swift  — PhotosPickerItem, multipart upload
+  Sources/SubmitComplaintView.swift       — Category picker, PhotosPicker (max 3), confirmation view
+  Sources/ComplaintListViewModel.swift    — loadComplaints(), UiState pattern
+  Sources/ComplaintListView.swift         — List, ComplaintRowView, UrgencyBadge, StatusBadge
+  Sources/ComplaintDetailViewModel.swift  — loadComplaint(), UiState pattern
+  Sources/ComplaintDetailView.swift       — Timeline, photos, work notes, TAT, feedback banner
+  Sources/SosViewModel.swift              — triggerSos(), UiState
+  Sources/SosView.swift                   — 3-step flow: warning → confirmationDialog → form → confirmed
+
+FEEDBACK, OUTAGE, NAVIGATION (Task 4c.4)
+------------------------------------------
+  Sources/FeedbackViewModel.swift    — submitFeedback(), UiState
+  Sources/FeedbackView.swift         — Star rating (1-5), comment (max 1000), ThankYouView
+  Sources/OutageListViewModel.swift  — loadOutages(), UiState
+  Sources/OutageListView.swift       — OutageRowView, OutageTypeBadge
+  Sources/HomeView.swift             — NavCards for My Complaints/Submit/Outages + red SOS button
+                                       NavigationStack with full .navigationDestination wiring
+
+SCREENS IMPLEMENTED (matching resident_complaint_flow.md):
+  ✓ Login / Register
+  ✓ Home (navigation hub with SOS panic button)
+  ✓ Submit Complaint (with photo picker, category, urgency, permissionToEnter)
+  ✓ Submit Complaint Confirmation (complaint ID, "View Status" CTA)
+  ✓ Complaint List (with urgency + status badges)
+  ✓ Complaint Detail (timeline, photos, work notes, ETA, TAT, feedback banner)
+  ✓ SOS Emergency (warning → confirmation dialog → form → confirmed screen)
+  ✓ Feedback (star rating + comment → ThankYou screen)
+  ✓ Outage List
+
+================================================================================
+STAFFAPP.iOS
+================================================================================
+Bundle ID: com.acls.staff
+Location: apps/StaffApp.iOS/
+
+PROJECT INFRASTRUCTURE (Task 4c.5)
+------------------------------------
+  StaffApp.iOS.xcodeproj/project.pbxproj   — Xcode project (30 files, iOS 16+)
+  Sources/Info.plist                        — API_BASE_URL, photo usage string
+  Sources/ACLSStaffApp.swift                — @main entry point
+  Sources/ContentView.swift                 — Root view (login vs home routing)
+  Sources/APIClient.swift                   — Identical to ResidentApp (no shared module)
+  Sources/Enums.swift                       — All domain enums
+  Sources/TokenStore.swift                  — Keychain service "com.acls.staff", staffMemberId field
+  Sources/ErrorCodeMapper.swift             — Staff-specific codes incl. Staff.CannotSetBusyManually
+  Sources/Localizable.strings               — Staff-specific error strings (19 entries)
+  Sources/Assets.xcassets/Contents.json     — Asset catalog
+  Sources/AuthDTOs.swift                    — LoginRequest, AuthTokenResponse (staffMemberId)
+  Sources/ComplaintDTOs.swift               — ComplaintDTO, WorkNoteDTO, UpdateStatusRequest, etc.
+  Sources/StaffDTOs.swift                   — StaffMemberDTO, UpdateAvailabilityRequest
+  Sources/AuthRepository.swift              — login() only
+  Sources/ComplaintRepository.swift         — getComplaint, updateStatus, updateEta, addWorkNote, resolve
+  Sources/StaffRepository.swift             — getMyProfile(), updateAvailability()
+  Sources/NavigationRouter.swift            — StaffAppRoute enum + NavigationPath routing
+
+AUTH (Task 4c.5)
+-----------------
+  Sources/LoginViewModel.swift   — TokenStore parameter injection
+  Sources/LoginView.swift        — Staff branding (wrench icon, "Staff Portal")
+
+TASK SCREENS (Task 4c.5)
+--------------------------
+  Sources/TaskListViewModel.swift          — loadProfile() via GET /staff/me
+  Sources/TaskListView.swift               — Availability badge, active assignments list,
+                                             TaskRowView, StaffStateBadge, UrgencyBadge, StatusBadge
+  Sources/TaskDetailViewModel.swift        — loadComplaint(), updateStatus(), isUpdatingStatus
+  Sources/TaskDetailView.swift             — Full detail + context-sensitive action buttons:
+                                             ASSIGNED → "Accept & En Route"
+                                             EN_ROUTE  → "Start Work" + "Update ETA"
+                                             IN_PROGRESS → "Mark Resolved" + "Add Note" + "Update ETA"
+  Sources/UpdateEtaViewModel.swift         — updateEta(), UiState
+  Sources/UpdateEtaView.swift              — DatePicker (graphical, future dates only), success screen
+  Sources/AddWorkNoteViewModel.swift       — addWorkNote(), UiState
+  Sources/AddWorkNoteView.swift            — TextEditor, success screen
+  Sources/ResolveComplaintViewModel.swift  — resolve() multipart, PhotosPickerItem loading
+  Sources/ResolveComplaintView.swift       — resolutionNotes (required), PhotosPicker (max 3), success
+  Sources/UpdateAvailabilityViewModel.swift — updateAvailability(), UiState
+  Sources/UpdateAvailabilityView.swift     — Radio-style picker (AVAILABLE, ON_BREAK, OFF_DUTY only)
+                                             Footer note: BUSY is set automatically
+  Sources/HomeView.swift                   — NavigationStack wrapping TaskListView, full route wiring
+
+SCREENS IMPLEMENTED (matching staff_resolve_flow.md):
+  ✓ Login
+  ✓ Task List (profile header with availability badge, active assignments)
+  ✓ Task Detail (full complaint view, context-sensitive action buttons per status)
+  ✓ Accept & En Route (status transition: ASSIGNED → EN_ROUTE)
+  ✓ Start Work (status transition: EN_ROUTE → IN_PROGRESS)
+  ✓ Update ETA (DatePicker sheet)
+  ✓ Add Work Note (TextEditor sheet)
+  ✓ Resolve Complaint (resolution notes + up to 3 completion photos, multipart POST)
+  ✓ Update Availability (AVAILABLE / ON_BREAK / OFF_DUTY; BUSY blocked with explanation)
+
+================================================================================
+TECHNICAL NOTES
+================================================================================
+
+1. NO SHARED MODULE: Both apps contain their own copy of APIClient, Enums, TokenStore, 
+   ErrorCodeMapper. This matches the Android pattern and avoids a cross-platform dependency.
+
+2. MULTIPART UPLOAD: Built manually with boundary string in APIClient. No third-party 
+   dependencies.
+
+3. PHOTO PICKER: Uses PhotosUI.PhotosPicker (iOS 16+). Data loaded via 
+   loadTransferable(type: Data.self) and passed as MultipartFile array.
+
+4. PARAMETER INJECTION: TokenStore is passed as a parameter to ViewModel methods rather 
+   than injected at init, to avoid @StateObject / @EnvironmentObject init-time conflicts.
+
+5. BUSY STATE: Staff cannot manually set BUSY — only AVAILABLE, ON_BREAK, OFF_DUTY are 
+   offered in UpdateAvailabilityView. Footer explains BUSY is set automatically.
+
+6. SOS FLOW: Three-step: warning screen → native .confirmationDialog → form (title 
+   pre-filled "Emergency") → confirmed screen showing ASSIGNED status.
+
+PHASE 4c STATUS: COMPLETE ✓
+
+All resident_complaint_flow.md screens implemented in ResidentApp.iOS.
+All staff_resolve_flow.md screens implemented in StaffApp.iOS.

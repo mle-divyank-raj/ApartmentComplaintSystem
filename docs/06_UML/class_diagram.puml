@@ -1,0 +1,243 @@
+@startuml class_diagram
+' File: docs/06_UML/class_diagram.puml
+' ACLS domain class diagram — mirrors UML diagram from project requirements
+
+skinparam class {
+  BackgroundColor LightYellow
+  BorderColor DarkOrange
+  FontName Arial
+}
+
+title ACLS Domain Class Diagram
+
+' Enums
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  SOS_EMERGENCY
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  EN_ROUTE
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum StaffState {
+  AVAILABLE
+  BUSY
+  ON_BREAK
+  OFF_DUTY
+}
+
+enum Role {
+  Resident
+  Manager
+  MaintenanceStaff
+}
+
+enum OutageType {
+  Electricity
+  Water
+  Gas
+  Internet
+  Elevator
+  Other
+}
+
+' Base User
+abstract class User {
+  +userId: int
+  +email: string
+  +passwordHash: string
+  +phone: string
+  +firstName: string
+  +lastName: string
+  +role: Role
+  +propertyId: int
+  +isActive: bool
+  +createdAt: DateTime
+  +lastLoginAt: DateTime?
+}
+
+' User extensions
+class Resident {
+  +residentId: int
+  +userId: int
+  +unitId: int
+  +leaseStart: Date?
+  +leaseEnd: Date?
+}
+
+class StaffMember {
+  +staffMemberId: int
+  +userId: int
+  +jobTitle: string?
+  +skills: List<string>
+  +availability: StaffState
+  +averageRating: decimal?
+  +lastAssignedAt: DateTime?
+  +Assign(): void
+  +MarkBusy(): void
+  +MarkAvailable(): void
+}
+
+class Manager {
+  ' Manager has no extension table
+  ' Role = Manager on User entity
+}
+
+' Property hierarchy
+class Property {
+  +propertyId: int
+  +name: string
+  +address: string
+  +isActive: bool
+  +createdAt: DateTime
+}
+
+class Building {
+  +buildingId: int
+  +propertyId: int
+  +name: string
+}
+
+class Unit {
+  +unitId: int
+  +buildingId: int
+  +unitNumber: string
+  +floor: int
+}
+
+' Central aggregate
+class Complaint {
+  +complaintId: int
+  +propertyId: int
+  +unitId: int
+  +residentId: int
+  +assignedStaffMemberId: int?
+  +title: string
+  +description: string
+  +category: string
+  +requiredSkills: List<string>
+  +urgency: Urgency
+  +status: TicketStatus
+  +permissionToEnter: bool
+  +eta: DateTime?
+  +createdAt: DateTime
+  +updatedAt: DateTime
+  +resolvedAt: DateTime?
+  +tat: decimal?
+  +residentRating: int?
+  +residentFeedbackComment: string?
+  +feedbackSubmittedAt: DateTime?
+  --
+  +{static} Create(): Complaint
+  +Assign(staffMemberId): Result
+  +StartEnRoute(): Result
+  +StartWork(): Result
+  +Resolve(notes): Result
+  +Close(rating, comment): Result
+}
+
+class Media {
+  +mediaId: int
+  +complaintId: int
+  +uploadedByUserId: int
+  +url: string
+  +type: string
+  +uploadedAt: DateTime
+}
+
+class WorkNote {
+  +workNoteId: int
+  +complaintId: int
+  +staffMemberId: int
+  +content: string
+  +createdAt: DateTime
+}
+
+class InvitationToken {
+  +invitationTokenId: int
+  +token: string
+  +unitId: int
+  +propertyId: int
+  +issuedByManagerUserId: int
+  +usedByUserId: int?
+  +issuedAt: DateTime
+  +expiresAt: DateTime
+  +usedAt: DateTime?
+  +isRevoked: bool
+}
+
+class Outage {
+  +outageId: int
+  +propertyId: int
+  +declaredByManagerUserId: int
+  +title: string
+  +outageType: OutageType
+  +description: string
+  +startTime: DateTime
+  +endTime: DateTime
+  +declaredAt: DateTime
+  +notificationSentAt: DateTime?
+}
+
+class AuditEntry {
+  +auditEntryId: int
+  +action: AuditAction
+  +entityType: string
+  +entityId: int
+  +actorUserId: int?
+  +actorRole: string?
+  +propertyId: int?
+  +occurredAt: DateTime
+  +oldValue: string?
+  +newValue: string?
+  +ipAddress: string?
+}
+
+' Domain service interfaces
+interface IDispatchService {
+  +FindOptimalStaffAsync(complaint, propertyId): List<StaffScore>
+}
+
+interface INotificationService {
+  +NotifyResident(residentId, complaint): void
+  +NotifyStaff(staffMemberId, complaint): void
+  +NotifyAllOnCallStaff(staffList, complaint): void
+  +BroadcastOutage(outage): void
+}
+
+interface IReportingService {
+  +GetStaffPerformanceSummary(propertyId): List<StaffPerformanceSummary>
+  +GetComplaintsByUnit(unitId, propertyId): List<Complaint>
+  +GetDashboardMetrics(propertyId): DashboardMetricsDto
+}
+
+interface IStorageService {
+  +UploadAsync(stream, fileName, contentType): string
+}
+
+' Relationships
+Property "1" *-- "many" Building : contains
+Building "1" *-- "many" Unit : contains
+User "1" -- "1" Resident : extended by
+User "1" -- "1" StaffMember : extended by
+Unit "1" -- "many" Resident : occupied by
+Property "1" -- "many" User : scopes
+Resident "1" -- "many" Complaint : submits
+StaffMember "1" -- "many" Complaint : assigned to
+Complaint "1" *-- "many" Media : has
+Complaint "1" *-- "many" WorkNote : has
+Property "1" -- "many" Outage : declares
+Complaint ..> IDispatchService : uses
+Complaint ..> INotificationService : triggers
+Complaint ..> IStorageService : uses (via controller)
+IReportingService ..> Complaint : reads
+
+@enduml

@@ -1,0 +1,17 @@
+{
+  "name": "acls-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/ResidentApp.Web",
+    "build": "npm run build --workspace=apps/ResidentApp.Web",
+    "build:packages": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

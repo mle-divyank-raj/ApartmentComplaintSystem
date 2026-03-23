@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.Domain</RootNamespace>
+    <AssemblyName>ACLS.Domain</AssemblyName>
+    <!--
+      DEPENDENCY RULE (Clean Architecture):
+      ACLS.Domain may ONLY reference ACLS.SharedKernel.
+      No EF Core, no MediatR, no external NuGet packages are permitted here.
+      Any violation of this rule is a critical architecture breach.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

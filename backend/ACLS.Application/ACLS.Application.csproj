@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.Application</RootNamespace>
+    <AssemblyName>ACLS.Application</AssemblyName>
+    <!--
+      DEPENDENCY RULE (Clean Architecture):
+      ACLS.Application may reference ACLS.Domain and ACLS.SharedKernel only.
+      Must NOT reference ACLS.Persistence, ACLS.Infrastructure, or ACLS.Api.
+      All external concerns resolved via interfaces defined in Common/Interfaces/.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACLS.Domain\ACLS.Domain.csproj" />
+    <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.*" />
+    <PackageReference Include="FluentValidation" Version="11.*" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.*" />
+  </ItemGroup>
+
+</Project>
