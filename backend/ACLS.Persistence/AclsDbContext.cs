@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using ACLS.Application.Common.Interfaces;
 using ACLS.Domain.AuditLog;
 using ACLS.Domain.Complaints;
 using ACLS.Domain.Identity;
@@ -14,7 +16,7 @@ namespace ACLS.Persistence;
 /// All entity configurations are applied via IEntityTypeConfiguration{T} classes in Configurations/.
 /// Connection string is read from environment / appsettings — never hardcoded.
 /// </summary>
-public sealed class AclsDbContext : DbContext
+public sealed class AclsDbContext : DbContext, IUnitOfWork
 {
     public AclsDbContext(DbContextOptions<AclsDbContext> options) : base(options) { }
 
@@ -46,5 +48,34 @@ public sealed class AclsDbContext : DbContext
 
         // Apply all IEntityTypeConfiguration<T> implementations in this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AclsDbContext).Assembly);
+    }
+
+    // ── IUnitOfWork ─────────────────────────────────────────────────────────
+
+    private IDbContextTransaction? _currentTransaction;
+
+    public async Task BeginTransactionAsync(CancellationToken ct)
+    {
+        _currentTransaction = await Database.BeginTransactionAsync(ct);
+    }
+
+    public async Task CommitTransactionAsync(CancellationToken ct)
+    {
+        if (_currentTransaction is null)
+            throw new InvalidOperationException("No active transaction to commit.");
+
+        await SaveChangesAsync(ct);
+        await _currentTransaction.CommitAsync(ct);
+        await _currentTransaction.DisposeAsync();
+        _currentTransaction = null;
+    }
+
+    public async Task RollbackTransactionAsync(CancellationToken ct)
+    {
+        if (_currentTransaction is null) return;
+
+        await _currentTransaction.RollbackAsync(ct);
+        await _currentTransaction.DisposeAsync();
+        _currentTransaction = null;
     }
 }

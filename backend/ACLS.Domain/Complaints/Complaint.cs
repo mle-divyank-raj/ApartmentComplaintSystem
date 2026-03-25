@@ -127,6 +127,9 @@ public sealed class Complaint : EntityBase
         RaiseDomainEvent(
             new ComplaintStatusChangedEvent(ComplaintId, previousStatus, TicketStatus.ASSIGNED, PropertyId));
 
+        RaiseDomainEvent(
+            new SosTriggeredEvent(ComplaintId, PropertyId, ResidentId));
+
         return Result.Success();
     }
 
@@ -216,6 +219,13 @@ public sealed class Complaint : EntityBase
         ResidentFeedbackComment = feedbackComment;
         FeedbackSubmittedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
+
+        // AssignedStaffMemberId is always set when status is RESOLVED (enforced by Resolve()).
+        if (AssignedStaffMemberId.HasValue)
+        {
+            RaiseDomainEvent(
+                new FeedbackSubmittedEvent(ComplaintId, PropertyId, AssignedStaffMemberId.Value, residentRating));
+        }
 
         return Result.Success();
     }

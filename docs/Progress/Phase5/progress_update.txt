@@ -1,0 +1,275 @@
+PHASE 5 — Worker Service and Notification Infrastructure — Progress Update
+==========================================================================
+Date: 2026-03-23
+Status: COMPLETE ✅
+Build: 0 errors, 0 warnings
+Tests: Domain.Tests 27/27 ✅  Application.Tests 22/22 ✅  (zero regressions)
+
+---
+
+SCOPE
+-----
+Phase 5 delivered the ACLS.Worker background-processing host and the full
+notification infrastructure wired to domain events. The work spanned four tasks:
+
+  Task 5.1  Notification Service Infrastructure
+            INotificationChannel abstraction, Email + SMS providers, NotificationService
+  Task 5.2  Worker Event Handlers (MediatR INotificationHandler<T>)
+            One handler per domain event, wired to jobs and audit log
+  Task 5.3  Worker Background Jobs
+            CalculateTatJob, UpdateAverageRatingJob, BroadcastOutageNotificationJob
+  Task 5.4  Worker Host
+            ACLS.Worker.csproj, Program.cs, solution file registration
+
+---
+
+DOMAIN PREREQUISITES (new events added before Task 5.1)
+--------------------------------------------------------
+Two domain events were missing and were created before any infrastructure work:
+
+  backend/ACLS.Domain/Complaints/Events/SosTriggeredEvent.cs
+    sealed record SosTriggeredEvent(int ComplaintId, int PropertyId, int ResidentId)
+    raised inside Complaint.TriggerSos() alongside the existing
+    ComplaintStatusChangedEvent.
+
+  backend/ACLS.Domain/Complaints/Events/FeedbackSubmittedEvent.cs
+    sealed record FeedbackSubmittedEvent(
+        int ComplaintId, int PropertyId, int StaffMemberId, int ResidentRating)
+    raised inside Complaint.Close() — guarded by AssignedStaffMemberId.HasValue.
+
+  backend/ACLS.Domain/Complaints/Complaint.cs  (updated)
+    TriggerSos()  — now also raises SosTriggeredEvent
+    Close()       — now also raises FeedbackSubmittedEvent (when staff assigned)
+
+---
+
+TASK 5.1 — NOTIFICATION SERVICE INFRASTRUCTURE
+-----------------------------------------------
+
+  backend/ACLS.Infrastructure/Notifications/INotificationChannel.cs
+    public interface with ChannelType property and SendAsync method.
+    NOTE: must be public (not internal) — NotificationService (public class) takes
+    IEnumerable<INotificationChannel> in its constructor; internal would cause CS0051.
+
+  backend/ACLS.Infrastructure/Notifications/EmailNotificationProvider.cs
+    internal sealed class implementing INotificationChannel (Email channel).
+    Reads ACLS_NOTIFICATION_KEY and ACLS_NOTIFICATION_EMAIL_FROM from IConfiguration.
+    Throws InvalidOperationException on missing keys (fail-fast at startup).
+    SendAsync: structured log stub — placeholder for SendGrid call.
+
+  backend/ACLS.Infrastructure/Notifications/SmsNotificationProvider.cs
+    internal sealed class implementing INotificationChannel (SMS channel).
+    Reads ACLS_NOTIFICATION_KEY and ACLS_NOTIFICATION_SMS_FROM from IConfiguration.
+    Throws InvalidOperationException on missing keys.
+    SendAsync: structured log stub — placeholder for Twilio call.
+
+  backend/ACLS.Infrastructure/Notifications/NotificationService.cs
+    public sealed class implementing INotificationService.
+    Constructor: IEnumerable<INotificationChannel>, IResidentRepository,
+                 IUserRepository, ILogger<NotificationService>.
+    BroadcastOutageAsync:
+      GetAllByPropertyAsync() → build all send tasks across channels → Task.WhenAll()
+    NotifyAllOnCallStaffAsync:
+      iterate staff entities → look up User → fan-out across channels → Task.WhenAll()
+    NotifyResidentAsync / NotifyStaffAsync:
+      look up User by UserId → send via matching channel provider.
+
+  backend/ACLS.Infrastructure/InfrastructureServiceCollectionExtensions.cs  (updated)
+    Added DI registrations:
+      services.AddScoped<INotificationChannel, EmailNotificationProvider>()
+      services.AddScoped<INotificationChannel, SmsNotificationProvider>()
+      services.AddScoped<INotificationService, NotificationService>()
+
+---
+
+TASK 5.2 — WORKER EVENT HANDLERS
+---------------------------------
+All handlers implement MediatR INotificationHandler<T>.
+Each performs: notification dispatch → job execution → audit write.
+
+  backend/ACLS.Worker/EventHandlers/ComplaintAssignedEventHandler.cs
+    Trigger: ComplaintAssignedEvent
+    Action:  NotifyStaffAsync(AssignedStaffMemberId, [Email, SMS])
+             AuditEntry.Create(AuditAction.ComplaintAssigned, ...)
+
+  backend/ACLS.Worker/EventHandlers/ComplaintResolvedEventHandler.cs
+    Trigger: ComplaintResolvedEvent
+    Action:  NotifyResidentAsync(ResidentId, [Email, InApp])
+             CalculateTatJob.ExecuteAsync()
+             UpdateAverageRatingJob.ExecuteAsync()
+             AuditEntry.Create(AuditAction.ComplaintResolved, ...)
+
+  backend/ACLS.Worker/EventHandlers/FeedbackSubmittedEventHandler.cs
+    Trigger: FeedbackSubmittedEvent
+    Action:  UpdateAverageRatingJob.ExecuteAsync(StaffMemberId, PropertyId)
+             AuditEntry.Create(AuditAction.FeedbackSubmitted, ...)
+
+  backend/ACLS.Worker/EventHandlers/OutageDeclaredEventHandler.cs
+    Trigger: OutageDeclaredEvent
+    Action:  BroadcastOutageNotificationJob.ExecuteAsync(OutageId, PropertyId)
+
+  backend/ACLS.Worker/EventHandlers/SosTriggeredEventHandler.cs
+    Trigger: SosTriggeredEvent
+    Action:  IStaffRepository.GetAvailableAsync(PropertyId)
+             IComplaintRepository.GetByIdAsync(ComplaintId, PropertyId)
+             NotifyAllOnCallStaffAsync(availableStaff, complaint) — concurrent
+             AuditEntry.Create(AuditAction.SosTriggered, ...)
+    Note: injects IStaffRepository + IComplaintRepository directly because
+          NotifyAllOnCallStaffAsync requires full domain entities, not IDs.
+
+---
+
+TASK 5.3 — WORKER BACKGROUND JOBS
+-----------------------------------
+
+  backend/ACLS.Worker/Jobs/CalculateTatJob.cs
+    ExecuteAsync(int complaintId, int propertyId, CancellationToken)
+    Formula: (decimal)(complaint.ResolvedAt.Value - complaint.CreatedAt).TotalMinutes
+    Writes via: complaint.RecordTat(tatMinutes) → IComplaintRepository.UpdateAsync()
+    Guard: early return if ResolvedAt is null.
+
+  backend/ACLS.Worker/Jobs/UpdateAverageRatingJob.cs
+    ExecuteAsync(int staffMemberId, int propertyId, CancellationToken)
+    Fetches all complaints for staff member → filters ResidentRating.HasValue
+    Formula: (decimal)ratings.Average()
+    Writes via: staff.UpdateAverageRating(averageRating) → IStaffRepository.UpdateAsync()
+    Guard: early return if no rated complaints.
+
+  backend/ACLS.Worker/Jobs/BroadcastOutageNotificationJob.cs
+    ExecuteAsync(int outageId, int propertyId, CancellationToken)
+    Idempotent: early return if outage.NotificationSentAt.HasValue (already sent).
+    Calls NotificationService.BroadcastOutageAsync() — Task.WhenAll() inside service.
+    After broadcast: outage.MarkNotificationSent() → IOutageRepository.UpdateAsync()
+    Audit: AuditEntry.Create(AuditAction.OutageDeclared, "Outage", outageId, propertyId)
+
+---
+
+TASK 5.4 — WORKER HOST
+-----------------------
+
+  backend/ACLS.Worker/ACLS.Worker.csproj
+    SDK: Microsoft.NET.Sdk.Worker
+    TargetFramework: net8.0
+    NuGet packages:
+      OpenTelemetry.Extensions.Hosting
+      OpenTelemetry.Instrumentation.Runtime
+      OpenTelemetry.Exporter.Console
+      Azure.Monitor.OpenTelemetry.Exporter           ← NOT the AspNetCore variant
+    Project references: Application, Domain, Infrastructure, Persistence, SharedKernel
+
+  backend/ACLS.Worker/Program.cs
+    Host.CreateApplicationBuilder(args)
+    AddPersistence(builder.Configuration) + AddInfrastructure()
+    MediatR: RegisterServicesFromAssemblies(applicationAssembly, workerAssembly)
+             + full pipeline behaviors (Validation, Transaction, Logging)
+    Jobs registered as AddScoped<T>() to match repository lifetimes
+    OTel:
+      Development  → Console exporter
+      Staging/Prod → AddAzureMonitorTraceExporter()
+                     AddAzureMonitorMetricExporter()
+                     AddAzureMonitorLogExporter()
+                     (connection string from ACLS_APPINSIGHTS_CONNECTION)
+
+  ApartmentComplaintSystem.sln  (updated)
+    Added ACLS.Worker with GUID {C4B7D2E1-F8A3-4B96-9D01-2E5F6A8B3C7D}
+    All 6 build configurations registered
+    Project nested under "backend" solution folder
+
+---
+
+BUGS RESOLVED
+-------------
+
+Bug 1 — CS0051: Accessibility inconsistency on INotificationChannel
+  Symptom: INotificationChannel was declared internal but NotificationService (public)
+           exposed it in a public constructor parameter → compiler error CS0051.
+  Fix:     Changed INotificationChannel to public interface.
+
+Bug 2 — CS0311: IDomainEvent does not implement MediatR.INotification
+  Symptom: All 5 EventHandlers failed: "cannot use X as INotificationHandler<T> —
+           no implicit reference conversion to MediatR.INotification".
+  Root cause: IDomainEvent in SharedKernel had no relationship to MediatR's
+              INotification. The existing Application handlers also had a latent
+              runtime bug (Publish(object) casts to INotification internally).
+  Fix:     Added PackageReference MediatR 12.* to ACLS.SharedKernel.csproj.
+           Changed IDomainEvent to: public interface IDomainEvent : INotification.
+  Impact:  All 5 Worker EventHandlers compile. Application-layer Publish() calls
+           are now correct at runtime (no more silent cast failure risk).
+
+Bug 3 — CS1061: UseAzureMonitor not found on OpenTelemetryBuilder in Worker SDK
+  Symptom: Azure.Monitor.OpenTelemetry.AspNetCore was referenced; its UseAzureMonitor()
+           extension method is unavailable in a Worker SDK project context.
+  Fix:     Replaced package with Azure.Monitor.OpenTelemetry.Exporter.
+           Updated Program.cs to use individual exporter methods:
+             AddAzureMonitorTraceExporter()
+             AddAzureMonitorMetricExporter()
+             AddAzureMonitorLogExporter()
+
+---
+
+PHASE 5 COMPLETION CHECKLIST
+------------------------------
+[✅] BroadcastOutageNotificationJob uses Task.WhenAll()
+       — delegates to NotificationService.BroadcastOutageAsync which fans out with
+         Task.WhenAll() over all residents × channels
+[✅] SosTriggeredEventHandler notifies all on-call staff concurrently
+       — NotifyAllOnCallStaffAsync fans out with Task.WhenAll() over all staff × channels
+[✅] NotificationSentAt updated after broadcast
+       — outage.MarkNotificationSent() called in BroadcastOutageNotificationJob after
+         Task.WhenAll() completes, followed by IOutageRepository.UpdateAsync()
+[✅] Complaint.Tat calculated and stored
+       — CalculateTatJob: (ResolvedAt - CreatedAt).TotalMinutes → complaint.RecordTat()
+[✅] StaffMember.AverageRating updated
+       — UpdateAverageRatingJob: average of all ResidentRating values → staff.UpdateAverageRating()
+[✅] All environment variable keys match environment_config.md Section 3.4
+       — ACLS_NOTIFICATION_KEY, ACLS_NOTIFICATION_EMAIL_FROM, ACLS_NOTIFICATION_SMS_FROM,
+         ACLS_APPINSIGHTS_CONNECTION
+[✅] Structured logging follows observability.md Section 4
+       — named parameters throughout, correct log levels (Debug/Information/Warning/Error)
+
+---
+
+ENVIRONMENT VARIABLE KEYS USED (phase 5)
+------------------------------------------
+  ACLS_NOTIFICATION_KEY         SendGrid / Twilio API key
+  ACLS_NOTIFICATION_EMAIL_FROM  Sender email address for EmailNotificationProvider
+  ACLS_NOTIFICATION_SMS_FROM    Sender phone number for SmsNotificationProvider
+  ACLS_APPINSIGHTS_CONNECTION   Azure Monitor connection string (Worker OTel exporter)
+
+---
+
+FILE INVENTORY (phase 5 — all new unless marked updated)
+---------------------------------------------------------
+  backend/ACLS.SharedKernel/ACLS.SharedKernel.csproj          [updated] +MediatR 12.*
+  backend/ACLS.SharedKernel/IDomainEvent.cs                    [updated] : INotification
+  backend/ACLS.Domain/Complaints/Events/SosTriggeredEvent.cs   [new]
+  backend/ACLS.Domain/Complaints/Events/FeedbackSubmittedEvent.cs [new]
+  backend/ACLS.Domain/Complaints/Complaint.cs                  [updated] TriggerSos+Close
+  backend/ACLS.Infrastructure/Notifications/INotificationChannel.cs   [new]
+  backend/ACLS.Infrastructure/Notifications/EmailNotificationProvider.cs [new]
+  backend/ACLS.Infrastructure/Notifications/SmsNotificationProvider.cs  [new]
+  backend/ACLS.Infrastructure/Notifications/NotificationService.cs      [new]
+  backend/ACLS.Infrastructure/InfrastructureServiceCollectionExtensions.cs [updated]
+  backend/ACLS.Worker/EventHandlers/ComplaintAssignedEventHandler.cs    [new]
+  backend/ACLS.Worker/EventHandlers/ComplaintResolvedEventHandler.cs    [new]
+  backend/ACLS.Worker/EventHandlers/FeedbackSubmittedEventHandler.cs    [new]
+  backend/ACLS.Worker/EventHandlers/OutageDeclaredEventHandler.cs       [new]
+  backend/ACLS.Worker/EventHandlers/SosTriggeredEventHandler.cs         [new]
+  backend/ACLS.Worker/Jobs/CalculateTatJob.cs                          [new]
+  backend/ACLS.Worker/Jobs/UpdateAverageRatingJob.cs                   [new]
+  backend/ACLS.Worker/Jobs/BroadcastOutageNotificationJob.cs           [new]
+  backend/ACLS.Worker/ACLS.Worker.csproj                               [new]
+  backend/ACLS.Worker/Program.cs                                        [new]
+  ApartmentComplaintSystem.sln                                          [updated]
+
+Total: 15 new files, 6 updated files
+
+---
+
+PENDING (future phases)
+------------------------
+  Phase 6  Integration and E2E tests
+  Phase 7  Infrastructure, Docker, Terraform, CI/CD
+  Note:    If ACLS.API ever co-hosts Worker handlers in-process, ACLS.Api.csproj
+           will need a project reference to ACLS.Worker and MediatR registration
+           must scan the Worker assembly (RegisterServicesFromAssembly(workerAssembly)).

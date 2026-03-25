@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using ACLS.Application.Common.Interfaces;
 using ACLS.Domain.AuditLog;
 using ACLS.Domain.Complaints;
 using ACLS.Domain.Outages;
@@ -26,6 +27,8 @@ public static class PersistenceServiceCollectionExtensions
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection"),
                 sql => sql.MigrationsAssembly(typeof(AclsDbContext).Assembly.FullName)));
+
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AclsDbContext>());
 
         services.AddScoped<IComplaintRepository, ComplaintRepository>();
         services.AddScoped<IStaffRepository, StaffRepository>();

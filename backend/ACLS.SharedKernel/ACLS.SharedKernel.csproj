@@ -9,5 +9,13 @@
     <AssemblyName>ACLS.SharedKernel</AssemblyName>
     <!-- Zero external NuGet dependencies — only .NET BCL permitted in SharedKernel -->
   </PropertyGroup>
+  <!-- Zero external NuGet dependencies — only .NET BCL permitted in SharedKernel,
+       with one pragmatic exception: MediatR.Contracts (INotification marker only)
+       which is required for domain events to flow through IPublisher in the Application
+       layer and INotificationHandler<T> in ACLS.Worker. Without it, runtime dispatch
+       via IPublisher.Publish(object, ct) fails with InvalidCastException. -->
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.*" />
+  </ItemGroup>
 
 </Project>

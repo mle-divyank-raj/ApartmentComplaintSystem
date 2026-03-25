@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ACLS.Application\ACLS.Application.csproj" />
     <ProjectReference Include="..\ACLS.Domain\ACLS.Domain.csproj" />
     <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
   </ItemGroup>

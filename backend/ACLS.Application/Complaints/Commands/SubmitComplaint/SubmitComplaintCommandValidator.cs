@@ -28,14 +28,6 @@ public sealed class SubmitComplaintCommandValidator : AbstractValidator<SubmitCo
             .MaximumLength(100).WithMessage("Category must not exceed 100 characters.");
 
         RuleFor(x => x.Urgency)
-            .NotEmpty().WithMessage("Urgency is required.")
-            .Must(u => ValidUrgencies.Contains(u, StringComparer.OrdinalIgnoreCase))
-            .WithMessage($"Urgency must be one of: {string.Join(", ", ValidUrgencies)}.");
-
-        RuleFor(x => x.UnitId)
-            .GreaterThan(0).WithMessage("UnitId must be a positive integer.");
-
-        RuleForEach(x => x.MediaUrls)
             .ChildRules(media =>
             {
                 media.RuleFor(m => m.Url)

@@ -1,9 +1,11 @@
 using ACLS.Application.Common.Interfaces;
 using ACLS.Domain.Dispatch;
+using ACLS.Domain.Notifications;
 using ACLS.Domain.Reporting;
 using ACLS.Domain.Storage;
 using ACLS.Infrastructure.Auth;
 using ACLS.Infrastructure.Dispatch;
+using ACLS.Infrastructure.Notifications;
 using ACLS.Infrastructure.Reporting;
 using ACLS.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +28,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IReportingService, ReportingService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+
+        // Notification channel providers — both registered so NotificationService
+        // receives IEnumerable<INotificationChannel> with Email + SMS implementations.
+        services.AddScoped<INotificationChannel, EmailNotificationProvider>();
+        services.AddScoped<INotificationChannel, SmsNotificationProvider>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }

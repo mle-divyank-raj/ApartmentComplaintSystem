@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ACLS.Worker</RootNamespace>
+    <AssemblyName>ACLS.Worker</AssemblyName>
+    <UserSecretsId>acls-worker-secrets</UserSecretsId>
+    <!--
+      DEPENDENCY RULE (Clean Architecture):
+      ACLS.Worker references Infrastructure and Persistence only for DI composition in Program.cs.
+      EventHandlers and Jobs inject Domain interfaces only — never Infrastructure or Persistence
+      concrete classes directly. Must NOT reference ACLS.Api or ACLS.Contracts.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- OpenTelemetry -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.*" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ACLS.Application\ACLS.Application.csproj" />
+    <ProjectReference Include="..\ACLS.Domain\ACLS.Domain.csproj" />
+    <ProjectReference Include="..\ACLS.Infrastructure\ACLS.Infrastructure.csproj" />
+    <ProjectReference Include="..\ACLS.Persistence\ACLS.Persistence.csproj" />
+    <ProjectReference Include="..\ACLS.SharedKernel\ACLS.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>
