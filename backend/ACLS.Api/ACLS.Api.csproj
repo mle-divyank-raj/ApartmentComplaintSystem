@@ -7,6 +7,7 @@
     <LangVersion>12</LangVersion>
     <RootNamespace>ACLS.Api</RootNamespace>
     <AssemblyName>ACLS.Api</AssemblyName>
+    <UserSecretsId>acls-api-secrets</UserSecretsId>
     <!--
       DEPENDENCY RULE: ACLS.Api references Application, Contracts, Persistence (DI only), Infrastructure (DI only).
       Controllers inject ONLY IMediator and IStorageService.
@@ -20,6 +21,10 @@
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.*" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.0-beta.1" />

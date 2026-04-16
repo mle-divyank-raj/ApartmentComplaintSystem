@@ -1,8 +1,8 @@
-import type { StaffMemberSummaryDto } from "@acls/api-contracts";
+import type { StaffAvailabilitySummaryDto } from "@acls/api-contracts";
 import { Card } from "@/components/ui/Card";
 
 interface StaffAvailabilitySummaryProps {
-  staff: StaffMemberSummaryDto[];
+  staff: StaffAvailabilitySummaryDto[];
 }
 
 export function StaffAvailabilitySummary({

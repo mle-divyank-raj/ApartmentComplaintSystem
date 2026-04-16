@@ -47,10 +47,28 @@ export interface ComplaintDto {
 }
 
 export interface ComplaintsPage {
-  items: ComplaintDto[];
+  items: ComplaintSummaryDto[];
   totalCount: number;
   page: number;
   pageSize: number;
+}
+
+export interface ComplaintSummaryDto {
+  complaintId: number;
+  unitId: number;
+  unitNumber: string;
+  buildingName: string;
+  residentId: number;
+  residentName: string;
+  assignedStaffMemberId: number | null;
+  assignedStaffMemberName: string | null;
+  title: string;
+  category: string;
+  urgency: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
 }
 
 export interface SubmitComplaintRequest {

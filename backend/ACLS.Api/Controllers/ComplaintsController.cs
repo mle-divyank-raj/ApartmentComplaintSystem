@@ -5,6 +5,7 @@ using ACLS.Application.Complaints.Commands.SubmitComplaint;
 using ACLS.Application.Complaints.Commands.SubmitFeedback;
 using ACLS.Application.Complaints.Commands.TriggerSos;
 using ACLS.Application.Complaints.Commands.UpdateEta;
+using ACLS.Application.Complaints.Commands.UpdateStatus;
 using ACLS.Application.Complaints.Queries.GetAllComplaints;
 using ACLS.Application.Complaints.Queries.GetComplaintById;
 using ACLS.Application.Complaints.Queries.GetComplaintsByResident;
@@ -101,14 +102,24 @@ public sealed class ComplaintsController : ApiControllerBase
     [HttpGet("my")]
     [Authorize(Roles = "Resident")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMy(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetMy(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
         // ResidentId is resolved inside the handler from ICurrentPropertyContext.UserId
         var result = await Mediator.Send(new GetComplaintsByResidentQuery(ResidentId: 0), cancellationToken);
         if (!result.IsSuccess)
             return MapError(result.Error);
 
-        return Ok(result.Value);
+        var items = result.Value;
+        return Ok(new
+        {
+            items,
+            totalCount = items.Count,
+            page,
+            pageSize
+        });
     }
 
     // ── POST /api/v1/complaints/sos ──────────────────────────────────────────
@@ -254,18 +265,18 @@ public sealed class ComplaintsController : ApiControllerBase
     [Authorize(Roles = "MaintenanceStaff")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    public Task<IActionResult> UpdateStatus(
+    public async Task<IActionResult> UpdateStatus(
         int complaintId,
         [FromBody] UpdateComplaintStatusRequest request,
         CancellationToken cancellationToken)
     {
-        // We need a separate handler for status transitions.
-        // Using UpdateEtaCommand for now would be wrong; we need a proper command.
-        // This is handled directly: load complaint and call appropriate method.
-        // For Phase 3, delegate to a status update handler (to be wired in Phase 4 if not built).
-        // For now, map to the correct command.
-        return Task.FromResult<IActionResult>(StatusCode(StatusCodes.Status501NotImplemented,
-            new { detail = "Status update via UpdateStatusCommand — wire handler in Phase 4." }));
+        var result = await Mediator.Send(
+            new UpdateStatusCommand(complaintId, request.Status), cancellationToken);
+
+        if (!result.IsSuccess)
+            return MapError(result.Error);
+
+        return Ok(result.Value);
     }
 
     // ── POST /api/v1/complaints/{complaintId}/resolve ────────────────────────

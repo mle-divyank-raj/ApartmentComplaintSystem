@@ -27,6 +27,6 @@ public sealed class DispatchController : ApiControllerBase
         if (!result.IsSuccess)
             return MapError(result.Error);
 
-        return Ok(result.Value);
+        return Ok(new { complaintId, recommendations = result.Value });
     }
 }

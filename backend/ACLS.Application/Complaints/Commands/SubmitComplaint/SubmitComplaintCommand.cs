@@ -14,6 +14,7 @@ public sealed record SubmitComplaintCommand(
     string Description,
     string Category,
     string Urgency,
+    int UnitId,
     bool PermissionToEnter,
     List<MediaUploadResult>? MediaUrls = null) : IRequest<Result<ComplaintDto>>;
 

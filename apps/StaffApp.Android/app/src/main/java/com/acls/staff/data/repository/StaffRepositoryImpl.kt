@@ -38,14 +38,14 @@ class StaffRepositoryImpl @Inject constructor(
     }
 
     private fun StaffMemberWithAssignmentsDto.toDomain() = Staff(
-        staffMemberId = staffMemberId,
-        userId = userId,
-        fullName = fullName,
-        jobTitle = jobTitle,
-        skills = skills,
-        availability = availability,
-        averageRating = averageRating,
-        lastAssignedAt = lastAssignedAt,
+        staffMemberId = profile.staffMemberId,
+        userId = profile.userId,
+        fullName = profile.fullName,
+        jobTitle = profile.jobTitle,
+        skills = profile.skills,
+        availability = profile.availability,
+        averageRating = profile.averageRating,
+        lastAssignedAt = profile.lastAssignedAt,
         activeAssignments = activeAssignments.map { c ->
             Complaint(
                 complaintId = c.complaintId,
@@ -62,12 +62,12 @@ class StaffRepositoryImpl @Inject constructor(
                 status = c.status,
                 permissionToEnter = c.permissionToEnter,
                 assignedStaffMember = c.assignedStaffMember?.let {
-                    StaffMemberSummary(it.staffMemberId, it.fullName, it.jobTitle, it.availability)
+                    StaffMemberSummary(it.staffMemberId, it.fullName, it.jobTitle, it.availability ?: "")
                 },
-                media = c.media.map { Media(it.mediaId, it.url, it.type, it.uploadedAt) },
-                workNotes = c.workNotes.map {
-                    WorkNote(it.workNoteId, it.content, it.staffMemberId, it.staffMemberName, it.createdAt)
-                },
+                media = c.media?.map { Media(it.mediaId, it.url, it.type, it.uploadedAt) } ?: emptyList(),
+                workNotes = c.workNotes?.map {
+                    WorkNote(it.workNoteId, it.content, it.staffMemberId, it.staffMemberName ?: "", it.createdAt)
+                } ?: emptyList(),
                 eta = c.eta,
                 createdAt = c.createdAt,
                 updatedAt = c.updatedAt,

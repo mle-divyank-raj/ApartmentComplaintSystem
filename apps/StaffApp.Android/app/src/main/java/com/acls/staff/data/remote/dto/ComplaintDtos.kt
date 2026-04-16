@@ -13,7 +13,7 @@ data class WorkNoteDto(
     @SerializedName("workNoteId") val workNoteId: Int,
     @SerializedName("content") val content: String,
     @SerializedName("staffMemberId") val staffMemberId: Int,
-    @SerializedName("staffMemberName") val staffMemberName: String,
+    @SerializedName("staffMemberName") val staffMemberName: String?,
     @SerializedName("createdAt") val createdAt: String
 )
 
@@ -21,7 +21,7 @@ data class StaffMemberSummaryDto(
     @SerializedName("staffMemberId") val staffMemberId: Int,
     @SerializedName("fullName") val fullName: String,
     @SerializedName("jobTitle") val jobTitle: String?,
-    @SerializedName("availability") val availability: String
+    @SerializedName("availability") val availability: String?
 )
 
 data class ComplaintDto(
@@ -39,8 +39,8 @@ data class ComplaintDto(
     @SerializedName("status") val status: String,
     @SerializedName("permissionToEnter") val permissionToEnter: Boolean,
     @SerializedName("assignedStaffMember") val assignedStaffMember: StaffMemberSummaryDto?,
-    @SerializedName("media") val media: List<MediaDto>,
-    @SerializedName("workNotes") val workNotes: List<WorkNoteDto>,
+    @SerializedName("media") val media: List<MediaDto>?,
+    @SerializedName("workNotes") val workNotes: List<WorkNoteDto>?,
     @SerializedName("eta") val eta: String?,
     @SerializedName("createdAt") val createdAt: String,
     @SerializedName("updatedAt") val updatedAt: String,

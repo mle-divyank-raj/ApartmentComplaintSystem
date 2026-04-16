@@ -4,6 +4,7 @@ export type {
   MediaDto,
   WorkNoteDto,
   StaffMemberSummaryDto,
+  ComplaintSummaryDto,
   ComplaintDto,
   ComplaintsPage,
   SubmitComplaintRequest,
@@ -29,6 +30,7 @@ export type { DeclareOutageRequest, OutageDto } from "./outages";
 export type {
   ActiveAssignmentDto,
   DashboardMetricsDto,
+  StaffAvailabilitySummaryDto,
   StaffPerformanceSummaryDto,
 } from "./reports";
 

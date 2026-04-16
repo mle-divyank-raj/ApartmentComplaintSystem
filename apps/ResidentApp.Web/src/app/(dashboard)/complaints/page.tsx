@@ -5,6 +5,7 @@ import { getAllComplaints } from "@/lib/api/complaints";
 import type { ComplaintsPage } from "@acls/api-contracts";
 import { ComplaintTable } from "@/components/complaints/ComplaintTable";
 import { ComplaintFilters } from "@/components/complaints/ComplaintFilters";
+import { AssignDialog } from "@/components/complaints/AssignDialog";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +24,7 @@ export default function ComplaintsPage() {
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [assigningComplaintId, setAssigningComplaintId] = useState<number | null>(null);
 
   const fetchComplaints = useCallback(
     (
@@ -144,7 +146,10 @@ export default function ComplaintsPage() {
         <LoadingSpinner />
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <ComplaintTable complaints={data?.items ?? []} />
+          <ComplaintTable
+            complaints={data?.items ?? []}
+            onAssign={(id) => setAssigningComplaintId(id)}
+          />
         </div>
       )}
 
@@ -170,6 +175,17 @@ export default function ComplaintsPage() {
             Next
           </Button>
         </div>
+      )}
+
+      {assigningComplaintId !== null && (
+        <AssignDialog
+          complaintId={assigningComplaintId}
+          onAssigned={() => {
+            setAssigningComplaintId(null);
+            fetchComplaints(page, statusFilter, urgencyFilter, categoryFilter, searchFilter, dateFromFilter, dateToFilter);
+          }}
+          onCancel={() => setAssigningComplaintId(null)}
+        />
       )}
     </div>
   );

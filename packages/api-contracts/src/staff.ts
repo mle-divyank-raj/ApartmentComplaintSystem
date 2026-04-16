@@ -1,6 +1,6 @@
 // Staff request/response types mirroring ACLS Application DTOs
 
-import type { ComplaintDto } from "./complaints";
+import type { ComplaintSummaryDto } from "./complaints";
 
 export interface StaffMemberDto {
   staffMemberId: number;
@@ -14,7 +14,7 @@ export interface StaffMemberDto {
 }
 
 export interface StaffMemberWithAssignmentsDto extends StaffMemberDto {
-  activeAssignments: ComplaintDto[];
+  activeAssignments: ComplaintSummaryDto[];
 }
 
 export interface UpdateAvailabilityRequest {

@@ -25,12 +25,7 @@ Run them as Docker containers:
 
 ```bash
 # SQL Server 2022
-docker run -d \
-  --name acls-sql \
-  -e "ACCEPT_EULA=Y" \
-  -e "SA_PASSWORD=YourStrong!Passw0rd" \
-  -p 1433:1433 \
-  mcr.microsoft.com/mssql/server:2022-latest
+docker run -d --name acls-sql -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong!Passw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 
 # Azurite (blob + queue + table emulator)
 docker run -d \

@@ -6,8 +6,11 @@ namespace ACLS.Infrastructure.Dispatch;
 
 /// <summary>
 /// Implementation of IDispatchService.
-/// Scores and ranks available StaffMembers for a given Complaint using the formula:
-///   matchScore = (skillScore × 0.6 + idleScore × 0.4) × urgencyWeight
+/// Scores and ranks on-duty StaffMembers (AVAILABLE, BUSY, ON_BREAK) for a given Complaint using:
+///   matchScore = (skillScore × 0.6 + idleScore × 0.4) × urgencyWeight × availabilityWeight
+///
+/// availabilityWeight: AVAILABLE=1.0, BUSY=0.6, ON_BREAK=0.3
+/// This ensures a skill-matched BUSY plumber ranks above an available electrician with no matching skills.
 ///
 /// This class is a pure algorithm — no EF Core, no HTTP, no external services.
 /// It depends only on IStaffRepository (a Domain interface).
@@ -25,7 +28,7 @@ public sealed class DispatchService : IDispatchService
         Complaint complaint,
         CancellationToken ct)
     {
-        var candidates = await _staffRepository.GetAvailableAsync(complaint.PropertyId, ct);
+        var candidates = await _staffRepository.GetOnDutyAsync(complaint.PropertyId, ct);
 
         if (candidates.Count == 0)
             return [];
@@ -41,11 +44,13 @@ public sealed class DispatchService : IDispatchService
         var scores = candidates
             .Select(staff =>
             {
-                var skillScore = CalculateSkillScore(staff, complaint);
-                var idleScore  = CalculateIdleScore(staff, now, maxIdleTime);
-                var matchScore = (skillScore * DispatchWeights.SkillWeight
-                                + idleScore  * DispatchWeights.IdleWeight)
-                                * urgencyWeight;
+                var skillScore        = CalculateSkillScore(staff, complaint);
+                var idleScore         = CalculateIdleScore(staff, now, maxIdleTime);
+                var availabilityWeight = GetAvailabilityWeight(staff.Availability);
+                var matchScore        = (skillScore * DispatchWeights.SkillWeight
+                                       + idleScore  * DispatchWeights.IdleWeight)
+                                       * urgencyWeight
+                                       * availabilityWeight;
 
                 return new StaffScore(
                     staffMember: staff,
@@ -98,4 +103,12 @@ public sealed class DispatchService : IDispatchService
         => urgency == Urgency.SOS_EMERGENCY
             ? DispatchWeights.SosUrgencyMultiplier
             : DispatchWeights.DefaultUrgencyMultiplier;
+
+    private static double GetAvailabilityWeight(StaffState availability) => availability switch
+    {
+        StaffState.AVAILABLE => DispatchWeights.AvailabilityWeightAvailable,
+        StaffState.BUSY      => DispatchWeights.AvailabilityWeightBusy,
+        StaffState.ON_BREAK  => DispatchWeights.AvailabilityWeightOnBreak,
+        _                    => 0.0
+    };
 }

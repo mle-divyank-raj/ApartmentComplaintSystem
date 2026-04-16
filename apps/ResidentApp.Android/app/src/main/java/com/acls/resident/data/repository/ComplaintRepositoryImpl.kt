@@ -84,27 +84,27 @@ class ComplaintRepositoryImpl @Inject constructor(
 
     private fun ComplaintDto.toDomain() = Complaint(
         complaintId = complaintId,
-        title = title,
-        description = description,
-        category = category,
-        urgency = urgency,
-        status = status,
+        title = title ?: "",
+        description = description ?: "",
+        category = category ?: "",
+        urgency = urgency ?: "",
+        status = status ?: "",
         unitNumber = unitNumber,
         buildingName = buildingName,
         permissionToEnter = permissionToEnter,
         assignedStaffName = assignedStaffMember?.fullName,
-        mediaUrls = media.map { it.url },
-        workNotes = workNotes.map {
+        mediaUrls = media?.map { it.url } ?: emptyList(),
+        workNotes = workNotes?.map {
             WorkNote(
                 workNoteId = it.workNoteId,
                 content = it.content,
                 staffMemberName = it.staffMemberName,
                 createdAt = it.createdAt
             )
-        },
+        } ?: emptyList(),
         eta = eta,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
+        createdAt = createdAt ?: "",
+        updatedAt = updatedAt ?: "",
         resolvedAt = resolvedAt,
         tat = tat,
         residentRating = residentRating,

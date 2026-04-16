@@ -74,6 +74,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// ── CORS ─────────────────────────────────────────────────────────────────────
+
+var allowedOrigins = config.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:3000"];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials());
+});
+
 // ── MVC / Controllers ────────────────────────────────────────────────────────
 
 builder.Services.AddControllers()
@@ -167,7 +181,10 @@ var app = builder.Build();
 // 1. Exception handler must be FIRST so it catches errors from all subsequent middleware
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// 2. HTTPS redirect
+// 2. CORS — must be before authentication/authorization
+app.UseCors("AllowFrontend");
+
+// 3. HTTPS redirect
 app.UseHttpsRedirection();
 
 // 3. Swagger (dev only)

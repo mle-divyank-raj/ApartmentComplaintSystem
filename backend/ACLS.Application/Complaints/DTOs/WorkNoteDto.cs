@@ -8,12 +8,14 @@ namespace ACLS.Application.Complaints.DTOs;
 public sealed record WorkNoteDto(
     int WorkNoteId,
     int StaffMemberId,
+    string StaffMemberName,
     string Content,
     DateTime CreatedAt)
 {
-    public static WorkNoteDto FromDomain(WorkNote workNote) => new(
+    public static WorkNoteDto FromDomain(WorkNote workNote, string staffMemberName = "") => new(
         workNote.WorkNoteId,
         workNote.StaffMemberId,
+        staffMemberName,
         workNote.Content,
         workNote.CreatedAt);
 }

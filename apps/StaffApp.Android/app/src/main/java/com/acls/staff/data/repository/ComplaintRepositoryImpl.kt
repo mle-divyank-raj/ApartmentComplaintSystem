@@ -35,8 +35,9 @@ class ComplaintRepositoryImpl @Inject constructor(
             UpdateComplaintStatusRequestDto(status = status)
         ).toDomain()
 
-    override suspend fun updateEta(complaintId: Int, eta: String): Complaint =
-        apiService.updateEta(complaintId, UpdateEtaRequestDto(eta = eta)).toDomain()
+    override suspend fun updateEta(complaintId: Int, eta: String) {
+        apiService.updateEta(complaintId, UpdateEtaRequestDto(eta = eta))
+    }
 
     override suspend fun addWorkNote(complaintId: Int, content: String): WorkNote =
         apiService.addWorkNote(complaintId, AddWorkNoteRequestDto(content = content)).toDomain()
@@ -77,11 +78,11 @@ class ComplaintRepositoryImpl @Inject constructor(
                 staffMemberId = it.staffMemberId,
                 fullName = it.fullName,
                 jobTitle = it.jobTitle,
-                availability = it.availability
+                availability = it.availability ?: ""
             )
         },
-        media = media.map { Media(it.mediaId, it.url, it.type, it.uploadedAt) },
-        workNotes = workNotes.map { it.toDomain() },
+        media = media?.map { Media(it.mediaId, it.url, it.type, it.uploadedAt) } ?: emptyList(),
+        workNotes = workNotes?.map { it.toDomain() } ?: emptyList(),
         eta = eta,
         createdAt = createdAt,
         updatedAt = updatedAt,
@@ -95,7 +96,7 @@ class ComplaintRepositoryImpl @Inject constructor(
         workNoteId = workNoteId,
         content = content,
         staffMemberId = staffMemberId,
-        staffMemberName = staffMemberName,
+        staffMemberName = staffMemberName ?: "",
         createdAt = createdAt
     )
 }

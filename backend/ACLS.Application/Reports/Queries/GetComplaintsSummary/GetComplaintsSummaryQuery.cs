@@ -12,14 +12,14 @@ public sealed record GetComplaintsSummaryQuery(
 public sealed class GetComplaintsSummaryQueryHandler
     : IRequestHandler<GetComplaintsSummaryQuery, Result<IReadOnlyList<ComplaintSummaryDto>>>
 {
-    private readonly IComplaintRepository _complaintRepository;
+    private readonly IComplaintReadService _readService;
     private readonly ICurrentPropertyContext _propertyContext;
 
     public GetComplaintsSummaryQueryHandler(
-        IComplaintRepository complaintRepository,
+        IComplaintReadService readService,
         ICurrentPropertyContext propertyContext)
     {
-        _complaintRepository = complaintRepository;
+        _readService = readService;
         _propertyContext = propertyContext;
     }
 
@@ -27,10 +27,8 @@ public sealed class GetComplaintsSummaryQueryHandler
         GetComplaintsSummaryQuery query,
         CancellationToken cancellationToken)
     {
-        var complaints = await _complaintRepository.GetAllAsync(
+        var (items, _) = await _readService.GetEnrichedAsync(
             _propertyContext.PropertyId, query.Options, cancellationToken);
-
-        var dtos = complaints.Select(ComplaintSummaryDto.FromDomain).ToList();
-        return Result<IReadOnlyList<ComplaintSummaryDto>>.Success(dtos);
+        return Result<IReadOnlyList<ComplaintSummaryDto>>.Success(items);
     }
 }

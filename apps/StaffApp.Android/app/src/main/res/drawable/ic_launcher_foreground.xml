@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher foreground: wrench + helmet icon for ACLS Staff app.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Helmet arc (top) -->
+    <path
+        android:pathData="M54,22 A28,22 0 0,1 82,44 H26 A28,22 0 0,1 54,22 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Helmet brim -->
+    <path
+        android:pathData="M20,44 H88 V50 H20 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Wrench body -->
+    <path
+        android:pathData="M48,56 L46,86 H62 L60,56 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Wrench head (horizontal bar) -->
+    <path
+        android:pathData="M36,54 H72 V62 H36 Z"
+        android:fillColor="#FFFFFF" />
+
+</vector>

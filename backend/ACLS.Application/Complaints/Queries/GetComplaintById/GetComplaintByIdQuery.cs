@@ -11,14 +11,14 @@ public sealed record GetComplaintByIdQuery(int ComplaintId) : IRequest<Result<Co
 public sealed class GetComplaintByIdQueryHandler
     : IRequestHandler<GetComplaintByIdQuery, Result<ComplaintDto>>
 {
-    private readonly IComplaintRepository _complaintRepository;
+    private readonly IComplaintReadService _readService;
     private readonly ICurrentPropertyContext _propertyContext;
 
     public GetComplaintByIdQueryHandler(
-        IComplaintRepository complaintRepository,
+        IComplaintReadService readService,
         ICurrentPropertyContext propertyContext)
     {
-        _complaintRepository = complaintRepository;
+        _readService = readService;
         _propertyContext = propertyContext;
     }
 
@@ -26,14 +26,14 @@ public sealed class GetComplaintByIdQueryHandler
         GetComplaintByIdQuery query,
         CancellationToken cancellationToken)
     {
-        var complaint = await _complaintRepository.GetByIdAsync(
+        var dto = await _readService.GetEnrichedByIdAsync(
             query.ComplaintId,
             _propertyContext.PropertyId,
             cancellationToken);
 
-        if (complaint is null)
+        if (dto is null)
             return Result<ComplaintDto>.Failure(ComplaintErrors.NotFound(query.ComplaintId));
 
-        return Result<ComplaintDto>.Success(ComplaintDto.FromDomain(complaint));
+        return Result<ComplaintDto>.Success(dto);
     }
 }

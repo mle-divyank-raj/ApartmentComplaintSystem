@@ -34,6 +34,13 @@ public sealed class StaffRepository : IStaffRepository
                   s => s.UserId, u => u.UserId, (s, _) => s)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<StaffMember>> GetOnDutyAsync(int propertyId, CancellationToken ct)
+        => await _db.StaffMembers
+            .Where(s => s.Availability != StaffState.OFF_DUTY)
+            .Join(_db.Users.Where(u => u.PropertyId == propertyId && u.IsActive),
+                  s => s.UserId, u => u.UserId, (s, _) => s)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<StaffMember>> GetAllByPropertyAsync(int propertyId, CancellationToken ct)
         => await _db.StaffMembers
             .Join(_db.Users.Where(u => u.PropertyId == propertyId),

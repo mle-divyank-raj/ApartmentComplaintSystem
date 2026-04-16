@@ -31,6 +31,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AclsDbContext>());
 
         services.AddScoped<IComplaintRepository, ComplaintRepository>();
+        services.AddScoped<IComplaintReadService, ComplaintReadService>();
         services.AddScoped<IStaffRepository, StaffRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IResidentRepository, ResidentRepository>();

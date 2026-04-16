@@ -25,6 +25,13 @@ public interface IStaffRepository
     /// </summary>
     Task<IReadOnlyList<StaffMember>> GetAvailableAsync(int propertyId, CancellationToken ct);
 
+    /// <summary>
+    /// Retrieves all on-duty StaffMembers (AVAILABLE, BUSY, or ON_BREAK — excludes OFF_DUTY),
+    /// scoped to the Property. Used by IDispatchService to build the full ranked candidate pool
+    /// so that skill-matched BUSY staff rank above available staff with no matching skills.
+    /// </summary>
+    Task<IReadOnlyList<StaffMember>> GetOnDutyAsync(int propertyId, CancellationToken ct);
+
     /// <summary>Retrieves all StaffMembers scoped to the specified Property.</summary>
     Task<IReadOnlyList<StaffMember>> GetAllByPropertyAsync(int propertyId, CancellationToken ct);
 

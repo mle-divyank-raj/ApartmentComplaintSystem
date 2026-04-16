@@ -2,6 +2,7 @@ using ACLS.Application.Common.Interfaces;
 using ACLS.Application.Dispatch.DTOs;
 using ACLS.Domain.Complaints;
 using ACLS.Domain.Dispatch;
+using ACLS.Domain.Identity;
 using ACLS.SharedKernel;
 using MediatR;
 
@@ -20,15 +21,18 @@ public sealed class GetDispatchRecommendationsQueryHandler
     private readonly IComplaintRepository _complaintRepository;
     private readonly IDispatchService _dispatchService;
     private readonly ICurrentPropertyContext _propertyContext;
+    private readonly IUserRepository _userRepository;
 
     public GetDispatchRecommendationsQueryHandler(
         IComplaintRepository complaintRepository,
         IDispatchService dispatchService,
-        ICurrentPropertyContext propertyContext)
+        ICurrentPropertyContext propertyContext,
+        IUserRepository userRepository)
     {
         _complaintRepository = complaintRepository;
         _dispatchService = dispatchService;
         _propertyContext = propertyContext;
+        _userRepository = userRepository;
     }
 
     public async Task<Result<IReadOnlyList<StaffScoreDto>>> Handle(
@@ -46,7 +50,18 @@ public sealed class GetDispatchRecommendationsQueryHandler
 
         var scores = await _dispatchService.FindOptimalStaffAsync(complaint, cancellationToken);
 
-        var dtos = scores.Select(StaffScoreDto.FromDomain).ToList();
+        var allUsers = await _userRepository.GetAllByPropertyAsync(
+            _propertyContext.PropertyId, cancellationToken);
+        var userNames = allUsers.ToDictionary(
+            u => u.UserId,
+            u => $"{u.FirstName} {u.LastName}");
+
+        var dtos = scores
+            .Select(s => StaffScoreDto.FromDomain(
+                s,
+                userNames.GetValueOrDefault(s.StaffMember.UserId, "Unknown")))
+            .ToList();
+
         return Result<IReadOnlyList<StaffScoreDto>>.Success(dtos);
     }
 }

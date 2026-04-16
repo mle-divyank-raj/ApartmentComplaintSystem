@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher foreground: simple building silhouette for ACLS Resident app.
+  Sized at 108×108dp with an 18dp safe-zone inset on each side (72dp content area).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Roof / triangle -->
+    <path
+        android:pathData="M54,26 L22,50 H86 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Building body -->
+    <path
+        android:pathData="M30,50 H78 V82 H30 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Door -->
+    <path
+        android:pathData="M46,82 V66 H62 V82 Z"
+        android:fillColor="#1565C0" />
+
+    <!-- Window left -->
+    <path
+        android:pathData="M34,54 H44 V64 H34 Z"
+        android:fillColor="#BBDEFB" />
+
+    <!-- Window right -->
+    <path
+        android:pathData="M64,54 H74 V64 H64 Z"
+        android:fillColor="#BBDEFB" />
+
+</vector>

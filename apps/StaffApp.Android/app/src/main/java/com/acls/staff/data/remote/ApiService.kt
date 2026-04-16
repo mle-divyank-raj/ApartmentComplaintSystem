@@ -12,6 +12,7 @@ import com.acls.staff.data.remote.dto.UpdateEtaRequestDto
 import com.acls.staff.data.remote.dto.WorkNoteDto
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
@@ -40,7 +41,7 @@ interface ApiService {
     suspend fun updateEta(
         @Path("complaintId") complaintId: Int,
         @Body request: UpdateEtaRequestDto
-    ): ComplaintDto
+    ): Response<Unit>
 
     @POST("complaints/{complaintId}/work-notes")
     suspend fun addWorkNote(

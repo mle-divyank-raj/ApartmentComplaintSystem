@@ -1,7 +1,5 @@
 // Reports response types mirroring ACLS Application DTOs
 
-import type { StaffMemberSummaryDto } from "./complaints";
-
 export interface ActiveAssignmentDto {
   complaintId: number;
   title: string;
@@ -9,7 +7,17 @@ export interface ActiveAssignmentDto {
   status: string;
   unitNumber: string;
   buildingName: string;
-  assignedStaffMember: StaffMemberSummaryDto;
+  assignedStaffMemberId: number;
+  assignedStaffMemberName: string;
+  eta: string | null;
+  createdAt: string;
+}
+
+export interface StaffAvailabilitySummaryDto {
+  staffMemberId: number;
+  fullName: string;
+  jobTitle: string | null;
+  availability: string;
 }
 
 export interface DashboardMetricsDto {
@@ -20,7 +28,7 @@ export interface DashboardMetricsDto {
   closedCount: number;
   sosActiveCount: number;
   activeAssignments: ActiveAssignmentDto[];
-  staffAvailabilitySummary: StaffMemberSummaryDto[];
+  staffAvailabilitySummary: StaffAvailabilitySummaryDto[];
 }
 
 export interface StaffPerformanceSummaryDto {

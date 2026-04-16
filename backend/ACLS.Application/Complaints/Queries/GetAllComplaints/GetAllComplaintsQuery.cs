@@ -1,3 +1,4 @@
+using ACLS.Application.Common;
 using ACLS.Application.Common.Interfaces;
 using ACLS.Application.Complaints.DTOs;
 using ACLS.Domain.Complaints;
@@ -7,32 +8,35 @@ using MediatR;
 namespace ACLS.Application.Complaints.Queries.GetAllComplaints;
 
 public sealed record GetAllComplaintsQuery(
-    ComplaintQueryOptions? Options = null) : IRequest<Result<IReadOnlyList<ComplaintSummaryDto>>>;
+    ComplaintQueryOptions? Options = null) : IRequest<Result<PagedResult<ComplaintSummaryDto>>>;
 
 public sealed class GetAllComplaintsQueryHandler
-    : IRequestHandler<GetAllComplaintsQuery, Result<IReadOnlyList<ComplaintSummaryDto>>>
+    : IRequestHandler<GetAllComplaintsQuery, Result<PagedResult<ComplaintSummaryDto>>>
 {
-    private readonly IComplaintRepository _complaintRepository;
+    private readonly IComplaintReadService _readService;
     private readonly ICurrentPropertyContext _propertyContext;
 
     public GetAllComplaintsQueryHandler(
-        IComplaintRepository complaintRepository,
+        IComplaintReadService readService,
         ICurrentPropertyContext propertyContext)
     {
-        _complaintRepository = complaintRepository;
+        _readService = readService;
         _propertyContext = propertyContext;
     }
 
-    public async Task<Result<IReadOnlyList<ComplaintSummaryDto>>> Handle(
+    public async Task<Result<PagedResult<ComplaintSummaryDto>>> Handle(
         GetAllComplaintsQuery query,
         CancellationToken cancellationToken)
     {
-        var complaints = await _complaintRepository.GetAllAsync(
+        var page     = Math.Max(1, query.Options?.Page ?? 1);
+        var pageSize = Math.Clamp(query.Options?.PageSize ?? 20, 1, 100);
+
+        var (items, totalCount) = await _readService.GetEnrichedAsync(
             _propertyContext.PropertyId,
             query.Options,
             cancellationToken);
 
-        var dtos = complaints.Select(ComplaintSummaryDto.FromDomain).ToList();
-        return Result<IReadOnlyList<ComplaintSummaryDto>>.Success(dtos);
+        return Result<PagedResult<ComplaintSummaryDto>>.Success(
+            new PagedResult<ComplaintSummaryDto>(items, totalCount, page, pageSize));
     }
 }

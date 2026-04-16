@@ -11,14 +11,14 @@ public sealed record GetComplaintsByUnitQuery(int UnitId) : IRequest<Result<IRea
 public sealed class GetComplaintsByUnitQueryHandler
     : IRequestHandler<GetComplaintsByUnitQuery, Result<IReadOnlyList<ComplaintSummaryDto>>>
 {
-    private readonly IComplaintRepository _complaintRepository;
+    private readonly IComplaintReadService _readService;
     private readonly ICurrentPropertyContext _propertyContext;
 
     public GetComplaintsByUnitQueryHandler(
-        IComplaintRepository complaintRepository,
+        IComplaintReadService readService,
         ICurrentPropertyContext propertyContext)
     {
-        _complaintRepository = complaintRepository;
+        _readService = readService;
         _propertyContext = propertyContext;
     }
 
@@ -26,10 +26,9 @@ public sealed class GetComplaintsByUnitQueryHandler
         GetComplaintsByUnitQuery query,
         CancellationToken cancellationToken)
     {
-        var complaints = await _complaintRepository.GetByUnitAsync(
-            query.UnitId, _propertyContext.PropertyId, cancellationToken);
-
-        var dtos = complaints.Select(ComplaintSummaryDto.FromDomain).ToList();
-        return Result<IReadOnlyList<ComplaintSummaryDto>>.Success(dtos);
+        var options = new ComplaintQueryOptions(UnitId: query.UnitId, PageSize: 200);
+        var (items, _) = await _readService.GetEnrichedAsync(
+            _propertyContext.PropertyId, options, cancellationToken);
+        return Result<IReadOnlyList<ComplaintSummaryDto>>.Success(items);
     }
 }

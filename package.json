@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=apps/ResidentApp.Web",
     "build": "npm run build --workspace=apps/ResidentApp.Web",
-    "build:packages": "npm run build --workspaces --if-present"
+    "build:packages": "echo \"Packages use TypeScript source directly — no build step needed. Run 'npm run build' to build the Next.js app.\""
   },
   "devDependencies": {
     "typescript": "^5.4.5"

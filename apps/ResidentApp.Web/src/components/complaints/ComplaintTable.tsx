@@ -1,13 +1,17 @@
-import type { ComplaintDto } from "@acls/api-contracts";
+import type { ComplaintSummaryDto } from "@acls/api-contracts";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
+import { Button } from "@/components/ui/Button";
+import { TicketStatus } from "@acls/shared-types";
 import Link from "next/link";
 
 interface ComplaintTableProps {
-  complaints: ComplaintDto[];
+  complaints: ComplaintSummaryDto[];
+  /** Called with the complaintId when the manager clicks Assign on an OPEN complaint. */
+  onAssign?: (complaintId: number) => void;
 }
 
-export function ComplaintTable({ complaints }: ComplaintTableProps) {
+export function ComplaintTable({ complaints, onAssign }: ComplaintTableProps) {
   if (complaints.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-gray-500">
@@ -45,6 +49,11 @@ export function ComplaintTable({ complaints }: ComplaintTableProps) {
             <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
               Submitted
             </th>
+            {onAssign && (
+              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
+                Actions
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
@@ -74,11 +83,22 @@ export function ComplaintTable({ complaints }: ComplaintTableProps) {
                 <StatusBadge status={c.status} />
               </td>
               <td className="px-4 py-3 text-gray-700">
-                {c.assignedStaffMember?.fullName ?? (
+                {c.assignedStaffMemberName ?? (
                   <span className="text-gray-400 italic">Unassigned</span>
                 )}
               </td>
-              <td className="px-4 py-3 text-gray-500">{c.createdAt}</td>
+              <td className="px-4 py-3 text-gray-500">
+                {new Date(c.createdAt).toLocaleDateString()}
+              </td>
+              {onAssign && (
+                <td className="px-4 py-3">
+                  {c.status === TicketStatus.OPEN && (
+                    <Button size="sm" onClick={() => onAssign(c.complaintId)}>
+                      Assign
+                    </Button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

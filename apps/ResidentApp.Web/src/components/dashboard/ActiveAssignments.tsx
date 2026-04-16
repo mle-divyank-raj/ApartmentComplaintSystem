@@ -32,7 +32,7 @@ export function ActiveAssignments({ assignments }: ActiveAssignmentsProps) {
                   {a.title}
                 </Link>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  {a.unitNumber} · {a.buildingName} · {a.assignedStaffMember.fullName}
+                  {a.unitNumber} · {a.buildingName} · {a.assignedStaffMemberName}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">

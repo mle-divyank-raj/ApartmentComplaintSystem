@@ -14,14 +14,7 @@ data class StaffMemberDto(
 )
 
 data class StaffMemberWithAssignmentsDto(
-    @SerializedName("staffMemberId") val staffMemberId: Int,
-    @SerializedName("userId") val userId: Int,
-    @SerializedName("fullName") val fullName: String,
-    @SerializedName("jobTitle") val jobTitle: String?,
-    @SerializedName("skills") val skills: List<String>,
-    @SerializedName("availability") val availability: String,
-    @SerializedName("averageRating") val averageRating: Double?,
-    @SerializedName("lastAssignedAt") val lastAssignedAt: String?,
+    @SerializedName("profile") val profile: StaffMemberDto,
     @SerializedName("activeAssignments") val activeAssignments: List<ComplaintDto>
 )
 
